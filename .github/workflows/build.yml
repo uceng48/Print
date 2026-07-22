@@ -1,36 +1,19 @@
-name: Build Electron App (Windows)
-
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
-
+name: Build Electron (Windows)
+on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
-
       - name: Install dependencies
         run: npm install
-
-      - name: Build Electron app (Windows)
-        run: npm run build:win
-        # atau npm run build -- --win --x64
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Build
+        run: npm run build:win   # atau npx electron-builder --win --x64
+      - uses: actions/upload-artifact@v4
         with:
-          name: ThinkFlow-Build
+          name: ThinkFlow
           path: dist/*.exe
-          if-no-files-found: error
