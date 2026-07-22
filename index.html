@@ -36,7 +36,7 @@
             font-family: 'Inter', sans-serif;
             background: #0f172a;
             color: var(--text-primary);
-            height: 100vh;
+            height: 100dvh; /* Diubah menjadi dvh untuk mencegah terpotong bar browser ponsel */
             overflow: hidden;
             touch-action: manipulation;
         }
@@ -78,7 +78,13 @@
             display: inline-block;
         }
         /* ===== MODUL CHAT ===== */
-        #module-chat { display: none; height: calc(100vh - 56px); background: var(--whatsapp-bg); flex-direction: column; }
+        #module-chat {
+            display: none;
+            height: calc(100dvh - 56px); /* Menggunakan dvh agar dinamis di ponsel */
+            background: var(--whatsapp-bg);
+            flex-direction: column;
+            overflow: hidden;
+        }
         #module-chat.active { display: flex; }
         #chat-login-screen { position: absolute; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: var(--whatsapp-bg); padding: 20px; flex-direction: column; }
         #chat-login-screen.hidden { display: none; }
@@ -91,10 +97,34 @@
         .login-box .btn:hover { background: var(--whatsapp-light); }
         .login-box .btn:active { transform: scale(0.97); }
         .login-box .hint { margin-top: 16px; font-size: 0.7rem; color: var(--text-secondary); }
-        #chat-app { display: none; height: 100%; background: var(--whatsapp-bg); }
+        #chat-app {
+            display: none;
+            height: 100%;
+            background: var(--whatsapp-bg);
+            flex: 1;
+            min-height: 0;
+        }
         #chat-app.active { display: flex; }
-        .chat-app-layout { display: flex; height: 100%; width: 100%; background: white; overflow: hidden; }
-        .chat-sidebar { width: 320px; background: white; border-right: 1px solid var(--border-light); display: flex; flex-direction: column; flex-shrink: 0; height: 100%; overflow: hidden; position: relative; }
+        .chat-app-layout {
+            display: flex;
+            height: 100%;
+            width: 100%;
+            background: white;
+            overflow: hidden;
+            flex: 1;
+            min-height: 0;
+        }
+        .chat-sidebar {
+            width: 320px;
+            background: white;
+            border-right: 1px solid var(--border-light);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }
         .chat-sidebar-header { padding: 12px 16px; background: var(--sidebar-bg); color: var(--text-primary); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; min-height: 64px; border-bottom: 1px solid var(--border-light); }
         .chat-sidebar-header .user { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .chat-sidebar-header .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--whatsapp-green); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; color: white; text-transform: uppercase; flex-shrink: 0; }
@@ -116,7 +146,13 @@
         .chat-search-area .input:focus { outline: 2px solid var(--whatsapp-green); background: white; }
         .chat-search-area .clear-search { background: none; border: none; color: #ccc; font-size: 0.8rem; cursor: pointer; padding: 0 4px; display: none; touch-action: manipulation; }
         .chat-search-area .clear-search.visible { display: block; }
-        .chat-peer-list-container { flex: 1; overflow-y: auto; padding: 0; background: white; }
+        .chat-peer-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+            background: white;
+            -webkit-overflow-scrolling: touch;
+        }
         .chat-peer-list-container .label { padding: 12px 16px 6px; font-size: 0.75rem; font-weight: 600; color: var(--whatsapp-dark); text-transform: uppercase; letter-spacing: 0.5px; }
         .chat-peer-item { display: flex; align-items: center; padding: 10px 16px; gap: 12px; cursor: pointer; transition: 0.1s; border-bottom: 1px solid var(--border-light); position: relative; }
         .chat-peer-item:hover { background: #F0F2F5; }
@@ -135,7 +171,16 @@
         .chat-sidebar-footer .btn { flex: 1; border: none; background: white; padding: 8px; border-radius: 16px; font-weight: 500; font-size: 0.7rem; cursor: pointer; transition: 0.15s; font-family: 'Inter', sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,0.05); touch-action: manipulation; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 32px; }
         .chat-sidebar-footer .btn:active { transform: scale(0.95); background: #e9ecef; }
         .chat-sidebar-footer .btn.danger { color: #e74c3c; }
-        .chat-main { flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--whatsapp-chat-bg); position: relative; min-width: 0; }
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: var(--whatsapp-chat-bg);
+            position: relative;
+            min-width: 0;
+            overflow: hidden;
+        }
         .chat-header { padding: 10px 16px; background: var(--chat-header-bg); border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; min-height: 60px; }
         .chat-header .left { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .chat-header .left .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--whatsapp-light); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1rem; flex-shrink: 0; }
@@ -147,7 +192,17 @@
         .chat-header .right .btn-icon.print-resi { color: var(--whatsapp-dark); }
         .chat-header .right .btn-icon.print-gambar { color: #3b82f6; }
         .chat-header .right .btn-icon.history-btn { color: #8b5cf6; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px; background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzAgMjB2MTBIMTBWMjBoMjB6TTAgMGg0MHY0MEgweiIgZmlsbD0iI2U1ZGRkNSIgb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg=='); background-size: 40px 40px; }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzAgMjB2MTBIMTBWMjBoMjB6TTAgMGg0MHY0MEgweiIgZmlsbD0iI2U1ZGRkNSIgb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==');
+            background-size: 40px 40px;
+            -webkit-overflow-scrolling: touch;
+        }
         .chat-messages .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 0.85rem; }
         .msg-card { max-width: 70%; border-radius: 10px; padding: 6px 12px; position: relative; word-break: break-word; box-shadow: 0 1px 1px rgba(0,0,0,0.05); margin-bottom: 2px; border: none; background: transparent; }
         .msg-card.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 3px; }
@@ -210,7 +265,7 @@
         .history-modal-toolbar .btn-pdf:hover { background: #dc2626; }
         .history-modal-toolbar .btn-pdf-all { background: #8b5cf6; color: white; }
         .history-modal-toolbar .btn-pdf-all:hover { background: #7c3aed; }
-        .history-modal-body { flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--whatsapp-chat-bg); }
+        .history-modal-body { flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--whatsapp-chat-bg); -webkit-overflow-scrolling: touch; }
         .history-date-group { margin-bottom: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
         .history-date-header { padding: 10px 16px; background: var(--whatsapp-dark); color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
         .history-date-header .date-label { font-weight: 700; font-size: 0.85rem; }
@@ -221,8 +276,14 @@
         .history-date-body .msg-card.in { background: var(--bubble-in); }
         .history-date-body .msg-card.out { background: var(--bubble-out); }
         .history-empty { text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 0.9rem; }
-        /* ===== MODUL CETAK ===== */
-        #module-cetak { display: none; height: calc(100vh - 56px); background: var(--whatsapp-bg); flex-direction: column; }
+       /* ===== MODUL CETAK ===== */
+        #module-cetak {
+            display: none;
+            height: calc(100dvh - 56px); /* Menggunakan dvh agar dinamis di ponsel */
+            background: var(--whatsapp-bg);
+            flex-direction: column;
+            overflow: hidden;
+        }
         #module-cetak.active { display: flex; }
         .cetak-header { background: var(--whatsapp-dark); border-bottom: 1px solid var(--whatsapp-light); padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; color: white; flex-shrink: 0; flex-wrap: wrap; gap: 8px; }
         .cetak-header h1 { font-size: 1.1rem; font-weight: 700; color: white; }
@@ -232,14 +293,33 @@
         .print-btn { background: var(--whatsapp-green); color: white; border: none; padding: 6px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .print-btn:hover { background: #20bc56; }
         .print-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .cetak-main { display: flex; flex: 1; overflow: hidden; }
-        .cetak-sidebar { width: 320px; background: var(--sidebar-bg); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; color: var(--text-primary); flex-shrink: 0; }
+        .cetak-main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .cetak-sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-light);
+            display: flex;
+            flex-direction: column;
+            color: var(--text-primary);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
         .cetak-tab-nav { display: flex; background: var(--chat-header-bg); padding: 6px 6px 0 6px; gap: 4px; flex-shrink: 0; border-bottom: 1px solid var(--border-light); }
         .cetak-tab-btn { flex: 1; padding: 8px 4px; border: none; background: #e1e3e6; color: var(--text-secondary); cursor: pointer; border-radius: 8px 8px 0 0; font-weight: bold; font-size: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; transition: 0.2s; }
         .cetak-tab-btn.active { background: white; color: var(--whatsapp-dark); border-bottom: 3px solid var(--whatsapp-green); }
         .cetak-tab-content { flex: 1; display: none; flex-direction: column; overflow: hidden; background: white; }
         .cetak-tab-content.active { display: flex; }
-        .cetak-sidebar-scroll { flex: 1; overflow-y: auto; padding: 12px; }
+        .cetak-sidebar-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            -webkit-overflow-scrolling: touch;
+        }
         .slider-group { margin-bottom: 14px; }
         .slider-group label { display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; font-weight: 600; }
         .numeric-input { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
@@ -263,9 +343,28 @@
         .history-log-card { background: #F0F2F5; border: 1px solid var(--border-light); border-left: 4px solid var(--whatsapp-green); padding: 8px 10px; border-radius: 6px; font-size: 10px; color: var(--text-primary); position: relative; margin-bottom: 6px; }
         .history-log-card .highlight { color: var(--whatsapp-dark); font-weight: bold; }
         .history-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); margin-bottom: 10px; }
-        .cetak-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .cetak-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            min-width: 0;
+        }
         .cetak-toolbar { background: var(--chat-header-bg); padding: 6px 16px; display: flex; gap: 10px; border-bottom: 1px solid var(--border-light); align-items: center; flex-shrink: 0; flex-wrap: wrap; }
-        .canvas-container { flex: 1; overflow: auto; padding: 16px; display: none; flex-direction: column; align-items: center; gap: 24px; background: var(--whatsapp-chat-bg); background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzAgMjB2MTBIMTBWMjBoMjB6TTAgMGg0MHY0MEgweiIgZmlsbD0iI2U1ZGRkNSIgb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg=='); background-size: 40px 40px; }
+        .canvas-container {
+            flex: 1;
+            overflow: auto;
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            background: var(--whatsapp-chat-bg);
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzAgMjB2MTBIMTBWMjBoMjB6TTAgMGg0MHY0MEgweiIgZmlsbD0iI2U1ZGRkNSIgb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==');
+            background-size: 40px 40px;
+            -webkit-overflow-scrolling: touch;
+        }
         .canvas-container.active { display: flex; }
         .paper-page { background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; flex-wrap: wrap; align-content: flex-start; justify-content: flex-start; align-items: flex-start; position: relative; flex-shrink: 0; padding: 5mm !important; gap: 0 !important; margin: 0 auto 24px auto; }
         .slot { border: 0.1mm dashed #ccc; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fafafa; flex-shrink: 0; margin: 0 !important; padding: 0 !important; }
@@ -355,6 +454,8 @@
             .crop-mark { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: block !important; }
             .slot.img-mode.no-crop .crop-mark { display: none !important; }
         }
+
+        /* ===== PERBAIKAN UTAMA UNTUK MOBILE (tombol Kirim tidak terpotong) ===== */
         @media (max-width: 768px) {
             .chat-sidebar { width: 240px; }
             .cetak-sidebar { width: 240px; }
@@ -362,12 +463,87 @@
             .chat-sidebar-header .user-info .name { max-width: 70px; }
             .history-modal { max-width: 100%; max-height: 95vh; border-radius: 12px; }
         }
-        @media (max-width: 480px) {
-            .chat-app-layout { flex-direction: column; }
-            .chat-sidebar { width: 100%; height: 42vh; border-right: none; border-bottom: 1px solid var(--border-light); }
-            .chat-main { height: 58vh; }
-            .cetak-sidebar { width: 100%; height: 42vh; border-right: none; border-bottom: 1px solid var(--border-light); }
-            .cetak-content { height: 58vh; }
+@media (max-width: 480px) {
+            /* Layout chat & cetak menjadi kolom */
+            .chat-app-layout {
+                flex-direction: column;
+                height: 100%;
+            }
+            .chat-sidebar {
+                width: 100%;
+                height: 30dvh; /* Mengurangi tinggi sidebar agar area chat lebih luas */
+                max-height: 180px; /* Batasi maksimal tinggi agar saat mengetik, sidebar tidak menutupi chat */
+                flex-shrink: 0;
+                border-right: none;
+                border-bottom: 1px solid var(--border-light);
+                overflow: hidden;
+            }
+            .chat-main {
+                flex: 1;
+                height: auto; /* Membiarkan flexbox mengatur sisa ruang secara otomatis */
+                min-height: 0;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .cetak-main {
+                flex-direction: column;
+                height: 100%;
+            }
+            .cetak-sidebar {
+                width: 100%;
+                height: 35dvh; /* Mengurangi tinggi panel cetak agar kanvas cetak terlihat jelas */
+                max-height: 220px;
+                flex-shrink: 0;
+                border-right: none;
+                border-bottom: 1px solid var(--border-light);
+                overflow: hidden;
+            }
+            .cetak-content {
+                flex: 1;
+                height: auto; /* Membiarkan ruang flexbox terbagi secara otomatis */
+                min-height: 0;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .canvas-container {
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                padding: 8px;
+            }
+        
+
+            /* Perbaikan area input chat agar tombol Kirim terlihat */
+            /* Perbaikan area input chat agar tombol Kirim terlihat */
+            .chat-input {
+                flex-shrink: 0;
+                padding: 6px 8px calc(10px + var(--safe-bottom)); /* Menambahkan kompensasi safe area bawah pada ponsel modern */
+                background: #F0F2F5;
+                z-index: 10;
+            }
+            .chat-input .input-actions {
+                flex-wrap: wrap;
+                justify-content: flex-start;
+                gap: 4px;
+            }
+            .chat-input .input-actions .btn {
+                flex: 0 0 auto;
+                min-width: 50px;
+                padding: 6px 10px;
+                font-size: 0.65rem;
+                min-height: 28px;
+            }
+            .chat-input .input-actions .btn-primary {
+                flex: 1;
+                min-width: 60px;
+            }
+            .chat-input .job-list {
+                max-height: 100px;
+            }
+
+            /* Elemen kecil lainnya */
             .login-box { padding: 24px 16px; }
             .chat-sidebar-header { padding: 8px 12px; min-height: 52px; }
             .chat-sidebar-header .user-info .name { font-size: 0.75rem; max-width: 60px; }
@@ -383,27 +559,34 @@
             .chat-messages { padding: 8px 12px; }
             .msg-card { max-width: 90%; padding: 4px 10px; }
             .msg-card .msg-body { font-size: 0.75rem; }
-            .chat-input { padding: 4px 10px 8px; }
-            .chat-input .job-row { padding: 4px 8px; }
-            .chat-input .input-actions .btn { font-size: 0.6rem; padding: 4px 10px; min-height: 26px; }
             .cetak-header h1 { font-size: 0.9rem; }
             .cetak-header { padding: 6px 12px; }
             .paper-select { font-size: 10px; padding: 2px 8px; }
             .print-btn { font-size: 0.8rem; padding: 4px 14px; }
             .cetak-sidebar-scroll { padding: 8px; }
-            .cetak-sidebar-scroll select { padding: 4px; border-radius: 4px; background: #f0f2f5; border: 1px solid var(--border-light); }
             .cetak-tab-btn { font-size: 9px; padding: 6px 2px; }
             .history-modal-header h2 { font-size: 0.9rem; }
             .history-modal-toolbar { padding: 8px 16px; }
             .history-modal-body { padding: 12px 16px; }
             .history-date-header .date-label { font-size: 0.75rem; }
+
+            /* Pastikan semua area scrollable */
+            .chat-peer-list-container,
+            .cetak-sidebar-scroll {
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
         }
+
         @media (max-width: 380px) {
             .chat-sidebar-header .user-info .name { max-width: 40px; font-size: 0.65rem; }
             .chat-sidebar-header .avatar { width: 26px; height: 26px; font-size: 0.7rem; }
             .chat-connect-area .btn { font-size: 0.55rem; padding: 4px 8px; }
             .chat-connect-area .input { font-size: 0.65rem; padding: 4px 8px; }
+            .chat-input .input-actions .btn { min-width: 40px; font-size: 0.55rem; padding: 4px 6px; }
+            .chat-input .input-actions .btn-primary { min-width: 50px; }
         }
+
         .pdf-badge { background: #ef4444; color: white; border-radius: 4px; padding: 1px 8px; font-size: 0.5rem; font-weight: 700; margin-left: 4px; }
         /* ===== TAMBAHAN UNTUK LOG TABEL ===== */
         .log-table-container { overflow-x: auto; margin-top: 8px; }
@@ -435,7 +618,6 @@
     </style>
 </head>
 <body>
-
     <!-- ===== NAVBAR TAB ===== -->
     <div id="app-nav" class="no-print">
         <button class="tab-btn active" onclick="switchModule('chat')" id="tab-chat">💬 Chat</button>
@@ -584,7 +766,7 @@
         <div class="badge" id="bubble-badge" style="display: none;">0</div>
     </div>
 
-    <script>
+   <script>
         // ============================================================
         //  SHARED STATE & CHAT MODUL
         // ============================================================
@@ -2303,43 +2485,78 @@
 
         // ===== EXPORT EXCEL (RESI AKTIF) =====
         function exportActiveResiExcel() {
-            if (cetak_resiData.length === 0) { showToast('⚠️ Tidak ada resi di layar/canvas', 'error'); return; }
-            const now = new Date();
-            const waktuStr = now.toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const excelData = cetak_resiData.map((item) => ({
-                'NO.RESI': item.resi || '-',
-                'NO.PESANAN': item.orderId || '-',
-                'PENGIRIM': item.pengirim || '-',
-                'JASA KIRIM': item.courier || '-',
-                'CATATAN': item.catatan || '-',
-                'WAKTU': waktuStr
-            }));
-            if (typeof XLSX === 'undefined') {
-                console.error('XLSX library not loaded! Falling back to CSV.');
-                return exportActiveResiCSV();
-            }
-            try {
-                const ws = XLSX.utils.json_to_sheet(excelData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Resi Aktif");
-                const headers = Object.keys(excelData[0]);
-                const max_len = headers.map((key) => {
-                    let max = key.length;
-                    excelData.forEach(row => {
-                        const v = row[key] ? row[key].toString() : '';
-                        if (v.length > max) max = v.length;
-                    });
-                    return max;
-                });
-                ws['!cols'] = max_len.map(w => ({ w: Math.min(w + 5, 50) }));
-                XLSX.writeFile(wb, `Daftar_Resi_Aktif_${Date.now()}.xlsx`);
-                showToast('✅ Excel resi aktif berhasil diunduh. (' + excelData.length + ' baris)');
-            } catch (err) {
-                console.error('XLSX export error:', err);
-                showToast('❌ XLSX gagal, mencoba CSV...', 'error');
-                exportActiveResiCSV();
-            }
-        }
+    if (cetak_resiData.length === 0) {
+        showToast('⚠️ Tidak ada resi di layar/canvas', 'error');
+        return;
+    }
+    if (typeof XLSX === 'undefined') {
+        console.error('XLSX library not loaded! Falling back to CSV.');
+        return exportActiveResiCSV();
+    }
+    try {
+        const now = new Date();
+        const waktuStr = now.toLocaleString('id-ID', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+
+        // Siapkan data dengan nilai kosong yang aman
+        const excelData = cetak_resiData.map((item) => ({
+            'NO.RESI': (item.resi || '-').toString(),
+            'NO.PESANAN': (item.orderId || '-').toString(),
+            'PENGIRIM': (item.pengirim || '-').toString(),
+            'JASA KIRIM': (item.courier || '-').toString(),
+            'CATATAN': (item.catatan || '-').toString(),
+            'WAKTU': waktuStr
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+
+        // Atur lebar kolom
+        const headers = Object.keys(excelData[0]);
+        const max_len = headers.map((key) => {
+            let max = key.length;
+            excelData.forEach(row => {
+                const v = row[key] ? row[key].toString() : '';
+                if (v.length > max) max = v.length;
+            });
+            return max;
+        });
+        ws['!cols'] = max_len.map(w => ({ wch: Math.min(w + 5, 50) }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Resi Aktif");
+
+        // Tambahkan properti workbook agar kompatibel dengan Excel
+        wb.Props = {
+            Title: "Daftar Resi Aktif",
+            Subject: "Resi",
+            Author: "Think Flow",
+            CreatedDate: now
+        };
+
+        // Tulis file dengan opsi buffer
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+        const blob = new Blob([wbout], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Daftar_Resi_Aktif_${Date.now()}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+
+        showToast('✅ Excel resi aktif berhasil diunduh. (' + excelData.length + ' baris)');
+    } catch (err) {
+        console.error('XLSX export error:', err);
+        showToast('❌ XLSX gagal, mencoba CSV...', 'error');
+        exportActiveResiCSV();
+    }
+}
 
         function exportActiveResiCSV() {
             if (cetak_resiData.length === 0) { showToast('⚠️ Tidak ada resi di layar/canvas', 'error'); return; }
@@ -2369,85 +2586,113 @@
 
         // ===== EXPORT PRINT HISTORY TO EXCEL =====
         function exportPrintHistoryExcel() {
-            if (typeof XLSX === 'undefined') {
-                console.error('XLSX library not loaded! Falling back to CSV.');
-                return exportPrintHistoryCSV();
-            }
-            const history = getHistoryData();
-            if (history.length === 0) { showToast('⚠️ Tidak ada histori cetak', 'error'); return; }
-            const excelData = [];
-            history.forEach(session => {
-                let sessionDate = '', sessionTime = '';
-                if (session.timestamp) {
-                    const ts = session.timestamp;
-                    if (ts.includes(',')) {
-                        sessionDate = ts.split(',')[0].trim();
-                        sessionTime = ts.split(',')[1]?.trim() || '';
-                    } else if (ts.includes(' at ')) {
-                        sessionDate = ts.split(' at ')[0].trim();
-                        sessionTime = ts.split(' at ')[1]?.trim() || '';
-                    } else {
-                        try {
-                            const d = new Date(session.id || Date.now());
-                            sessionDate = d.toLocaleDateString('id-ID');
-                            sessionTime = d.toLocaleTimeString('id-ID');
-                        } catch (e) {
-                            sessionDate = ts;
-                            sessionTime = ts;
-                        }
+    if (typeof XLSX === 'undefined') {
+        console.error('XLSX library not loaded! Falling back to CSV.');
+        return exportPrintHistoryCSV();
+    }
+    const history = getHistoryData();
+    if (history.length === 0) {
+        showToast('⚠️ Tidak ada histori cetak', 'error');
+        return;
+    }
+
+    try {
+        const excelData = [];
+        history.forEach(session => {
+            let sessionDate = '',
+                sessionTime = '';
+            if (session.timestamp) {
+                const ts = session.timestamp;
+                if (ts.includes(',')) {
+                    sessionDate = ts.split(',')[0].trim();
+                    sessionTime = ts.split(',')[1]?.trim() || '';
+                } else if (ts.includes(' at ')) {
+                    sessionDate = ts.split(' at ')[0].trim();
+                    sessionTime = ts.split(' at ')[1]?.trim() || '';
+                } else {
+                    try {
+                        const d = new Date(session.id || Date.now());
+                        sessionDate = d.toLocaleDateString('id-ID');
+                        sessionTime = d.toLocaleTimeString('id-ID');
+                    } catch (_) {
+                        sessionDate = ts;
+                        sessionTime = ts;
                     }
                 }
-                if (session.items && session.items.length > 0) {
-                    session.items.forEach((item) => {
-                        excelData.push({
-                            'NO.RESI': item.resi || '-',
-                            'NO.PESANAN': item.orderId || '-',
-                            'PENGIRIM': item.pengirim || '-',
-                            'JASA KIRIM': item.courier || '-',
-                            'CATATAN': item.catatan || '-',
-                            'TANGGAL CETAK': sessionDate,
-                            'JAM CETAK': sessionTime,
-                            'NAMA FILE': item.name || '-',
-                            'HALAMAN': item.page || '-'
-                        });
-                    });
-                } else {
+            }
+            if (session.items && session.items.length > 0) {
+                session.items.forEach((item) => {
                     excelData.push({
-                        'NO.RESI': '-',
-                        'NO.PESANAN': '-',
-                        'PENGIRIM': '-',
-                        'JASA KIRIM': '-',
-                        'CATATAN': '-',
+                        'NO.RESI': (item.resi || '-').toString(),
+                        'NO.PESANAN': (item.orderId || '-').toString(),
+                        'PENGIRIM': (item.pengirim || '-').toString(),
+                        'JASA KIRIM': (item.courier || '-').toString(),
+                        'CATATAN': (item.catatan || '-').toString(),
                         'TANGGAL CETAK': sessionDate,
                         'JAM CETAK': sessionTime,
-                        'NAMA FILE': 'Summary: ' + (session.totalResi || 0) + ' resi',
-                        'HALAMAN': session.totalPages || '-'
+                        'NAMA FILE': (item.name || '-').toString(),
+                        'HALAMAN': (item.page || '-').toString()
                     });
-                }
-            });
-            if (excelData.length === 0) { showToast('⚠️ Data histori tidak bisa diproses', 'error'); return; }
-            try {
-                const ws = XLSX.utils.json_to_sheet(excelData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Histori Cetak");
-                const headers = Object.keys(excelData[0]);
-                const max_len = headers.map((key) => {
-                    let max = key.length;
-                    excelData.forEach(row => {
-                        const v = row[key] ? row[key].toString() : '';
-                        if (v.length > max) max = v.length;
-                    });
-                    return max;
                 });
-                ws['!cols'] = max_len.map(w => ({ w: Math.min(w + 3, 50) }));
-                XLSX.writeFile(wb, `Histori_Cetak_Resi_${Date.now()}.xlsx`);
-                showToast('✅ Excel histori cetak berhasil diunduh. (' + excelData.length + ' baris)');
-            } catch (err) {
-                console.error('XLSX export error:', err);
-                showToast('❌ XLSX gagal, mencoba CSV...', 'error');
-                exportPrintHistoryCSV();
+            } else {
+                excelData.push({
+                    'NO.RESI': '-',
+                    'NO.PESANAN': '-',
+                    'PENGIRIM': '-',
+                    'JASA KIRIM': '-',
+                    'CATATAN': '-',
+                    'TANGGAL CETAK': sessionDate,
+                    'JAM CETAK': sessionTime,
+                    'NAMA FILE': 'Summary: ' + (session.totalResi || 0) + ' resi',
+                    'HALAMAN': (session.totalPages || '-').toString()
+                });
             }
+        });
+
+        if (excelData.length === 0) {
+            showToast('⚠️ Data histori tidak bisa diproses', 'error');
+            return;
         }
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const headers = Object.keys(excelData[0]);
+        const max_len = headers.map((key) => {
+            let max = key.length;
+            excelData.forEach(row => {
+                const v = row[key] ? row[key].toString() : '';
+                if (v.length > max) max = v.length;
+            });
+            return max;
+        });
+        ws['!cols'] = max_len.map(w => ({ wch: Math.min(w + 3, 50) }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Histori Cetak");
+
+        wb.Props = {
+            Title: "Histori Cetak Resi",
+            Subject: "Cetak Resi",
+            Author: "Think Flow",
+            CreatedDate: new Date()
+        };
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+        const blob = new Blob([wbout], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Histori_Cetak_Resi_${Date.now()}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+
+        showToast('✅ Excel histori cetak berhasil diunduh. (' + excelData.length + ' baris)');
+    } catch (err) {
+        console.error('XLSX export error:', err);
+        showToast('❌ XLSX gagal, mencoba CSV...', 'error');
+        exportPrintHistoryCSV();
+    }
+}
 
         function exportPrintHistoryCSV() {
             const history = getHistoryData();
