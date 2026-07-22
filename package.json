@@ -27,6 +27,7 @@
     "files": [
       "!node_modules/.bin",
       "!*.map"
+      "resources/**/*"
     ]
   }
 }
