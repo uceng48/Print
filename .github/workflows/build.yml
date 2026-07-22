@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:   # tombol manual di GitHub
+  workflow_dispatch:
 
 jobs:
   build:
@@ -18,16 +18,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: 'npm'
 
       - name: Install dependencies
         run: npm install
 
       - name: Build Electron app (Windows)
-        run: npm run build -- --win --x64
-        # --win --x64 akan menghasilkan installer (NSIS) dan portable
-        # karena di package.json sudah diatur target: ["nsis", "portable"]
+        run: npm run build:win
+        # atau npm run build -- --win --x64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
