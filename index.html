@@ -1,0 +1,2362 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Think Flow + Cetak Resi (PaddleOCR Ready)</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== RESET & VARIABEL ===== */
+        :root {
+            --whatsapp-green: #25D366;
+            --whatsapp-dark: #075E54;
+            --whatsapp-light: #128C7E;
+            --whatsapp-bg: #E5DDD5;
+            --whatsapp-chat-bg: #ECE5DD;
+            --bubble-out: #DCF8C6;
+            --bubble-in: #FFFFFF;
+            --text-primary: #1A1A1A;
+            --text-secondary: #667781;
+            --border-light: #E9EDEF;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --radius: 12px;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --sidebar-bg: #F0F2F5;
+            --chat-header-bg: #F0F2F5;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        /* ===== NAVBAR TAB ===== */
+        #app-nav {
+            background: #1e293b;
+            padding: 8px 16px;
+            display: flex;
+            gap: 12px;
+            border-bottom: 1px solid #334155;
+            z-index: 1000;
+            position: relative;
+            flex-shrink: 0;
+        }
+        #app-nav .tab-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+        }
+        #app-nav .tab-btn.active { background: #3b82f6; color: white; }
+        #app-nav .tab-btn:hover { background: #334155; color: white; }
+        #app-nav .tab-badge {
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            padding: 1px 7px;
+            font-size: 0.7rem;
+            margin-left: 6px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        /* ===== MODUL CHAT ===== */
+        #module-chat { display: none; height: calc(100vh - 56px); background: var(--whatsapp-bg); flex-direction: column; }
+        #module-chat.active { display: flex; }
+        #chat-login-screen { position: absolute; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: var(--whatsapp-bg); padding: 20px; flex-direction: column; }
+        #chat-login-screen.hidden { display: none; }
+        .login-box { background: white; padding: 40px 32px; border-radius: 24px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
+        .login-box .logo { font-size: 2.4rem; font-weight: 700; color: var(--whatsapp-dark); margin-bottom: 6px; }
+        .login-box .sub { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px; }
+        .login-box .input { background: #F0F2F5; border: none; border-radius: 10px; padding: 12px 16px; font-size: 0.95rem; width: 100%; transition: 0.2s; font-family: 'Inter', sans-serif; }
+        .login-box .input:focus { outline: 2px solid var(--whatsapp-green); background: white; }
+        .login-box .btn { border: none; background: var(--whatsapp-green); color: white; font-weight: 600; padding: 12px; border-radius: 10px; width: 100%; font-size: 1rem; cursor: pointer; transition: 0.2s; margin-top: 12px; font-family: 'Inter', sans-serif; }
+        .login-box .btn:hover { background: var(--whatsapp-light); }
+        .login-box .btn:active { transform: scale(0.97); }
+        .login-box .hint { margin-top: 16px; font-size: 0.7rem; color: var(--text-secondary); }
+        #chat-app { display: none; height: 100%; background: var(--whatsapp-bg); }
+        #chat-app.active { display: flex; }
+        .chat-app-layout { display: flex; height: 100%; width: 100%; background: white; overflow: hidden; }
+        .chat-sidebar { width: 320px; background: white; border-right: 1px solid var(--border-light); display: flex; flex-direction: column; flex-shrink: 0; height: 100%; overflow: hidden; position: relative; }
+        .chat-sidebar-header { padding: 12px 16px; background: var(--sidebar-bg); color: var(--text-primary); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; min-height: 64px; border-bottom: 1px solid var(--border-light); }
+        .chat-sidebar-header .user { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .chat-sidebar-header .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--whatsapp-green); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; color: white; text-transform: uppercase; flex-shrink: 0; }
+        .chat-sidebar-header .user-info .name { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+        .chat-sidebar-header .user-info .status { font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; }
+        .chat-sidebar-header .user-info .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #aaa; display: inline-block; }
+        .chat-sidebar-header .user-info .status .dot.online { background: var(--whatsapp-green); }
+        .chat-sidebar-actions { display: flex; gap: 4px; flex-shrink: 0; }
+        .chat-sidebar-actions .btn-icon { background: rgba(0,0,0,0.05); border: none; color: var(--text-primary); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; transition: 0.15s; touch-action: manipulation; }
+        .chat-sidebar-actions .btn-icon:active { background: rgba(0,0,0,0.1); transform: scale(0.92); }
+        .chat-connect-area { padding: 10px 14px; background: white; border-bottom: 1px solid var(--border-light); display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+        .chat-connect-area .input { flex: 1; border: 1px solid var(--border-light); border-radius: 20px; padding: 6px 14px; font-size: 0.8rem; background: #F0F2F5; transition: 0.2s; font-family: 'Inter', sans-serif; height: 36px; }
+        .chat-connect-area .input:focus { outline: none; border-color: var(--whatsapp-green); background: white; }
+        .chat-connect-area .btn { border: none; background: var(--whatsapp-green); color: white; padding: 4px 14px; border-radius: 20px; font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: 0.15s; font-family: 'Inter', sans-serif; white-space: nowrap; touch-action: manipulation; flex-shrink: 0; height: 36px; display: flex; align-items: center; justify-content: center; }
+        .chat-connect-area .btn:active { transform: scale(0.95); }
+        .chat-search-area { padding: 8px 14px; background: white; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .chat-search-area .search-icon { color: var(--text-secondary); font-size: 0.85rem; flex-shrink: 0; }
+        .chat-search-area .input { flex: 1; border: none; background: #F0F2F5; border-radius: 16px; padding: 4px 12px; font-size: 0.75rem; font-family: 'Inter', sans-serif; height: 30px; transition: 0.2s; }
+        .chat-search-area .input:focus { outline: 2px solid var(--whatsapp-green); background: white; }
+        .chat-search-area .clear-search { background: none; border: none; color: #ccc; font-size: 0.8rem; cursor: pointer; padding: 0 4px; display: none; touch-action: manipulation; }
+        .chat-search-area .clear-search.visible { display: block; }
+        .chat-peer-list-container { flex: 1; overflow-y: auto; padding: 0; background: white; }
+        .chat-peer-list-container .label { padding: 12px 16px 6px; font-size: 0.75rem; font-weight: 600; color: var(--whatsapp-dark); text-transform: uppercase; letter-spacing: 0.5px; }
+        .chat-peer-item { display: flex; align-items: center; padding: 10px 16px; gap: 12px; cursor: pointer; transition: 0.1s; border-bottom: 1px solid var(--border-light); position: relative; }
+        .chat-peer-item:hover { background: #F0F2F5; }
+        .chat-peer-item.active-chat-item { background: #E9EDEF; border-left: 4px solid var(--whatsapp-green); }
+        .chat-peer-item .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--whatsapp-light); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.1rem; flex-shrink: 0; }
+        .chat-peer-item .info { flex: 1; display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+        .chat-peer-item .info .name { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+        .chat-peer-item .info .status-text { font-size: 0.75rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chat-peer-item .remove-btn { background: none; border: none; color: #b4beaf; font-size: 1.1rem; cursor: pointer; padding: 4px; border-radius: 50%; transition: 0.15s; touch-action: manipulation; flex-shrink: 0; margin-left: auto; display: none; }
+        .chat-peer-item:hover .remove-btn { display: block; }
+        .chat-peer-item .remove-btn:hover { color: #e74c3c; }
+        .chat-peer-item .online-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--whatsapp-green); flex-shrink: 0; border: 2px solid white; }
+        .chat-peer-item .unread-count { background: var(--whatsapp-green); color: white; border-radius: 50%; min-width: 18px; height: 18px; font-size: 0.65rem; font-weight: bold; display: flex; align-items: center; justify-content: center; padding: 0 4px; margin-left: auto; }
+        .chat-peer-empty { padding: 24px 16px; text-align: center; color: var(--text-secondary); font-size: 0.8rem; }
+        .chat-sidebar-footer { padding: 10px 14px; border-top: 1px solid var(--border-light); background: #F0F2F5; display: flex; gap: 8px; flex-shrink: 0; }
+        .chat-sidebar-footer .btn { flex: 1; border: none; background: white; padding: 8px; border-radius: 16px; font-weight: 500; font-size: 0.7rem; cursor: pointer; transition: 0.15s; font-family: 'Inter', sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,0.05); touch-action: manipulation; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 32px; }
+        .chat-sidebar-footer .btn:active { transform: scale(0.95); background: #e9ecef; }
+        .chat-sidebar-footer .btn.danger { color: #e74c3c; }
+        .chat-main { flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--whatsapp-chat-bg); position: relative; min-width: 0; }
+        .chat-header { padding: 10px 16px; background: var(--chat-header-bg); border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; min-height: 60px; }
+        .chat-header .left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .chat-header .left .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--whatsapp-light); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1rem; flex-shrink: 0; }
+        .chat-header .left .info .name { font-weight: 600; font-size: 0.95rem; }
+        .chat-header .left .info .sub { font-size: 0.75rem; color: var(--text-secondary); }
+        .chat-header .right { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+        .chat-header .right .btn-icon { background: transparent; border: none; color: var(--text-secondary); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; cursor: pointer; transition: 0.15s; touch-action: manipulation; }
+        .chat-header .right .btn-icon:active { background: rgba(0,0,0,0.05); }
+        .chat-header .right .btn-icon.print-resi { color: var(--whatsapp-dark); }
+        .chat-header .right .btn-icon.print-gambar { color: #3b82f6; }
+        .chat-header .right .btn-icon.history-btn { color: #8b5cf6; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px; background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzAgMjB2MTBIMTBWMjBoMjB6TTAgMGg0MHY0MEgweiIgZmlsbD0iI2U1ZGRkNSIgb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg=='); background-size: 40px 40px; }
+        .chat-messages .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 0.85rem; }
+        .msg-card { max-width: 70%; border-radius: 10px; padding: 6px 12px; position: relative; word-break: break-word; box-shadow: 0 1px 1px rgba(0,0,0,0.05); margin-bottom: 2px; border: none; background: transparent; }
+        .msg-card.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 3px; }
+        .msg-card.out { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 3px; }
+        .msg-card .msg-header { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 0.65rem; color: var(--text-secondary); padding-bottom: 2px; flex-wrap: wrap; }
+        .msg-card .msg-header .sender { font-weight: 600; color: var(--whatsapp-dark); font-size: 0.7rem; }
+        .msg-card .msg-header .badge { font-size: 0.5rem; background: rgba(0,0,0,0.05); padding: 1px 6px; border-radius: 8px; color: var(--text-secondary); }
+        .msg-card .msg-body { font-size: 0.8rem; line-height: 1.4; padding: 2px 0; }
+        .msg-card .msg-body img { max-width: 100%; border-radius: 6px; margin-top: 4px; cursor: pointer; }
+        .msg-card .msg-body .file-box { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.04); padding: 6px 10px; border-radius: 6px; margin-top: 4px; cursor: pointer; transition: 0.1s; }
+        .msg-card .msg-body .file-box:active { background: rgba(0,0,0,0.08); }
+        .msg-card .msg-body .file-box .pdf-icon { font-size: 1.4rem; }
+        .msg-card .msg-footer { font-size: 0.55rem; color: var(--text-secondary); display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding-top: 2px; flex-wrap: wrap; }
+        .msg-card .msg-footer .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+        .msg-card .msg-footer .btn-mini { background: transparent; border: none; color: var(--text-secondary); font-size: 0.55rem; padding: 2px 6px; cursor: pointer; border-radius: 4px; transition: 0.1s; font-family: 'Inter', sans-serif; touch-action: manipulation; }
+        .msg-card .msg-footer .btn-mini:active { background: rgba(0,0,0,0.05); }
+        .msg-card .msg-footer .btn-mini.primary { color: var(--whatsapp-light); }
+        .msg-card .msg-footer .btn-mini.success { color: var(--whatsapp-green); }
+        .forward-dropdown { position: relative; display: inline-block; }
+        .forward-dropdown .menu { display: none; position: absolute; bottom: 120%; right: 0; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 4px 0; min-width: 140px; z-index: 100; }
+        .forward-dropdown .menu.open { display: block; }
+        .forward-dropdown .menu-item { padding: 8px 14px; cursor: pointer; font-size: 0.7rem; color: var(--text-primary); transition: 0.1s; white-space: nowrap; }
+        .forward-dropdown .menu-item:active { background: #F0F2F5; }
+        .chat-input { background: #F0F2F5; padding: 6px 12px 10px; border-top: 1px solid var(--border-light); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+        .chat-input .job-list { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
+        .chat-input .job-row { background: white; border-radius: 10px; padding: 6px 10px; border: 1px solid var(--border-light); transition: 0.1s; display: flex; flex-direction: column; gap: 4px; }
+        .chat-input .job-row .top { display: flex; justify-content: space-between; align-items: center; }
+        .chat-input .job-row .top .label { font-size: 0.55rem; font-weight: 600; color: var(--text-secondary); }
+        .chat-input .job-row .top .remove-job { background: none; border: none; color: #ccc; font-size: 0.7rem; cursor: pointer; padding: 0 4px; touch-action: manipulation; }
+        .chat-input .job-row .top .remove-job:active { color: #e74c3c; }
+        .chat-input .job-row .thumb-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+        .chat-input .job-row .thumb-box { width: 32px; height: 32px; background: #eee; border-radius: 6px; overflow: hidden; position: relative; border: 1px solid var(--border-light); }
+        .chat-input .job-row .thumb-box img { width: 100%; height: 100%; object-fit: cover; }
+        .chat-input .job-row .thumb-box .del { position: absolute; top: -4px; right: -4px; background: #e74c3c; color: white; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; cursor: pointer; line-height: 1; touch-action: manipulation; }
+        .chat-input .job-row .add-thumb { width: 32px; height: 32px; border: 1px dashed var(--whatsapp-green); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; cursor: pointer; color: var(--whatsapp-green); background: white; touch-action: manipulation; }
+        .chat-input .job-row .input { border: none; background: #F0F2F5; border-radius: 6px; padding: 4px 8px; font-size: 0.7rem; width: 100%; font-family: 'Inter', sans-serif; margin-bottom: 2px; }
+        .chat-input .job-row .input:focus { outline: 2px solid var(--whatsapp-green); background: white; }
+        .chat-input .job-row textarea.input { min-height: 30px; resize: vertical; }
+        .chat-input .input-actions { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+        .chat-input .input-actions .btn { border: none; background: white; padding: 4px 12px; border-radius: 16px; font-weight: 500; font-size: 0.65rem; cursor: pointer; transition: 0.15s; font-family: 'Inter', sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: inline-flex; align-items: center; justify-content: center; gap: 4px; touch-action: manipulation; min-height: 30px; }
+        .chat-input .input-actions .btn:active { transform: scale(0.95); }
+        .chat-input .input-actions .btn-primary { background: var(--whatsapp-green); color: white; flex: 1; justify-content: center; }
+        .chat-input .input-actions .btn-primary:active { background: var(--whatsapp-light); }
+        .chat-input .input-actions .btn-outline { border: 1px solid var(--border-light); background: white; }
+        .toast { position: fixed; bottom: calc(20px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); padding: 10px 24px; border-radius: 30px; background: var(--whatsapp-dark); color: white; font-weight: 500; font-size: 0.8rem; z-index: 20000; animation: fadeIn 0.25s; box-shadow: 0 4px 20px rgba(0,0,0,0.2); max-width: 90vw; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .toast.error { background: #e74c3c; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        /* ===== HISTORY MODAL ===== */
+        .history-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 30000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+        .history-overlay.open { display: flex; }
+        .history-modal { background: white; border-radius: 20px; max-width: 900px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        .history-modal-header { padding: 16px 24px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; background: var(--whatsapp-dark); color: white; }
+        .history-modal-header h2 { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .history-modal-header .close-btn { background: rgba(255,255,255,0.15); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; transition: 0.15s; }
+        .history-modal-header .close-btn:active { background: rgba(255,255,255,0.3); }
+        .history-modal-toolbar { padding: 10px 24px; background: #F0F2F5; border-bottom: 1px solid var(--border-light); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
+        .history-modal-toolbar .btn { border: none; padding: 6px 16px; border-radius: 16px; font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: 0.15s; font-family: 'Inter', sans-serif; touch-action: manipulation; display: flex; align-items: center; gap: 4px; }
+        .history-modal-toolbar .btn:active { transform: scale(0.95); }
+        .history-modal-toolbar .btn-pdf { background: #ef4444; color: white; }
+        .history-modal-toolbar .btn-pdf:hover { background: #dc2626; }
+        .history-modal-toolbar .btn-pdf-all { background: #8b5cf6; color: white; }
+        .history-modal-toolbar .btn-pdf-all:hover { background: #7c3aed; }
+        .history-modal-body { flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--whatsapp-chat-bg); }
+        .history-date-group { margin-bottom: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
+        .history-date-header { padding: 10px 16px; background: var(--whatsapp-dark); color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .history-date-header .date-label { font-weight: 700; font-size: 0.85rem; }
+        .history-date-header .btn-pdf-date { background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 14px; border-radius: 12px; font-size: 0.65rem; font-weight: 600; cursor: pointer; transition: 0.15s; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 4px; }
+        .history-date-header .btn-pdf-date:active { background: rgba(255,255,255,0.35); }
+        .history-date-body { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+        .history-date-body .msg-card { max-width: 100%; box-shadow: none; border: 1px solid var(--border-light); margin-bottom: 2px; }
+        .history-date-body .msg-card.in { background: var(--bubble-in); }
+        .history-date-body .msg-card.out { background: var(--bubble-out); }
+        .history-empty { text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 0.9rem; }
+        /* ===== MODUL CETAK ===== */
+        #module-cetak { display: none; height: calc(100vh - 56px); background: var(--whatsapp-bg); flex-direction: column; }
+        #module-cetak.active { display: flex; }
+        .cetak-header { background: var(--whatsapp-dark); border-bottom: 1px solid var(--whatsapp-light); padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; color: white; flex-shrink: 0; flex-wrap: wrap; gap: 8px; }
+        .cetak-header h1 { font-size: 1.1rem; font-weight: 700; color: white; }
+        .cetak-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .paper-select { background: var(--whatsapp-light); padding: 4px 12px; border-radius: 8px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: white; }
+        .paper-select select, .paper-select input { background: var(--whatsapp-dark); border: 1px solid var(--whatsapp-light); color: white; font-weight: bold; outline: none; padding: 2px 5px; border-radius: 4px; }
+        .print-btn { background: var(--whatsapp-green); color: white; border: none; padding: 6px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .print-btn:hover { background: #20bc56; }
+        .print-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .cetak-main { display: flex; flex: 1; overflow: hidden; }
+        .cetak-sidebar { width: 320px; background: var(--sidebar-bg); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; color: var(--text-primary); flex-shrink: 0; }
+        .cetak-tab-nav { display: flex; background: var(--chat-header-bg); padding: 6px 6px 0 6px; gap: 4px; flex-shrink: 0; border-bottom: 1px solid var(--border-light); }
+        .cetak-tab-btn { flex: 1; padding: 8px 4px; border: none; background: #e1e3e6; color: var(--text-secondary); cursor: pointer; border-radius: 8px 8px 0 0; font-weight: bold; font-size: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; transition: 0.2s; }
+        .cetak-tab-btn.active { background: white; color: var(--whatsapp-dark); border-bottom: 3px solid var(--whatsapp-green); }
+        .cetak-tab-content { flex: 1; display: none; flex-direction: column; overflow: hidden; background: white; }
+        .cetak-tab-content.active { display: flex; }
+        .cetak-sidebar-scroll { flex: 1; overflow-y: auto; padding: 12px; }
+        .slider-group { margin-bottom: 14px; }
+        .slider-group label { display: block; font-size: 10px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; font-weight: 600; }
+        .numeric-input { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+        .numeric-input input { width: 100%; background: #F0F2F5; border: 1px solid var(--border-light); color: var(--text-primary); padding: 4px 6px; border-radius: 4px; font-size: 12px; }
+        .info-box { background: #F0F2F5; border: 1px solid var(--border-light); padding: 8px 10px; border-radius: 8px; font-size: 11px; margin-top: 8px; color: var(--text-primary); }
+        .btn-blue { background: var(--whatsapp-light); color: white; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-red { background: #ef4444; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-pdf-history { background: #8b5cf6; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-pdf-history:active { transform: scale(0.95); }
+        .asset-grid-title { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 10px; font-weight: bold; color: var(--whatsapp-dark); border-top: 1px solid var(--border-light); }
+        .asset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+        .asset-item { background: #F0F2F5; border-radius: 6px; overflow: hidden; cursor: pointer; border: 2px solid transparent; position: relative; }
+        .asset-item:hover { border-color: var(--whatsapp-green); }
+        .asset-item img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #e5e5e5; display: block; }
+        .asset-item .name { padding: 4px; font-size: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
+        .rotate-btn { position: absolute; top: 4px; right: 4px; background: var(--whatsapp-light); color: white; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .history-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 8px; }
+        .history-item { background: #F0F2F5; border-radius: 6px; overflow: hidden; cursor: pointer; font-size: 8px; text-align: center; border: 1px solid var(--border-light); color: var(--text-primary); position: relative; }
+        .history-item img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+        .history-item .del-btn { position: absolute; top: 2px; right: 2px; background: rgba(220,38,38,0.8); color: white; border: none; border-radius: 50%; width: 16px; height: 16px; cursor: pointer; font-size: 10px; line-height: 1; z-index: 10; }
+        .history-log-card { background: #F0F2F5; border: 1px solid var(--border-light); border-left: 4px solid var(--whatsapp-green); padding: 8px 10px; border-radius: 6px; font-size: 10px; color: var(--text-primary); position: relative; margin-bottom: 6px; }
+        .history-log-card .highlight { color: var(--whatsapp-dark); font-weight: bold; }
+        .history-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); margin-bottom: 10px; }
+        .cetak-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .cetak-toolbar { background: var(--chat-header-bg); padding: 6px 16px; display: flex; gap: 10px; border-bottom: 1px solid var(--border-light); align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+        .canvas-container { flex: 1; overflow: auto; padding: 16px; display: none; flex-direction: column; align-items: center; gap: 24px; background: var(--whatsapp-chat-bg); background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMzAgMjB2MTBIMTBWMjBoMjB6TTAgMGg0MHY0MEgweiIgZmlsbD0iI2U1ZGRkNSIgb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg=='); background-size: 40px 40px; }
+        .canvas-container.active { display: flex; }
+        .paper-page { background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; flex-wrap: wrap; align-content: flex-start; justify-content: flex-start; align-items: flex-start; position: relative; flex-shrink: 0; padding: 5mm !important; gap: 0 !important; margin: 0 auto 24px auto; }
+        .slot { border: 0.1mm dashed #ccc; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fafafa; flex-shrink: 0; margin: 0 !important; padding: 0 !important; }
+        .slot img { max-width: 96% !important; max-height: 96% !important; width: auto !important; height: auto !important; display: block; margin: auto; }
+        .slot.img-mode { position: absolute !important; left: var(--x-screen) !important; top: var(--y-screen) !important; border: none !important; overflow: hidden; background: transparent; outline: none !important; }
+        .slot.img-mode img { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important; display: block; object-fit: fill; margin: 0 !important; }
+        .crop-mark { position: absolute; width: var(--crop-len); height: var(--crop-len); pointer-events: none; z-index: 25; display: none; }
+        .slot.img-mode:not(.no-crop) .crop-mark { display: block; }
+        .crop-mark.tl { top: var(--crop-offset); left: var(--crop-offset); border-top: var(--crop-thick) solid #000; border-left: var(--crop-thick) solid #000; }
+        .crop-mark.tr { top: var(--crop-offset); right: var(--crop-offset); border-top: var(--crop-thick) solid #000; border-right: var(--crop-thick) solid #000; }
+        .crop-mark.bl { bottom: var(--crop-offset); left: var(--crop-offset); border-bottom: var(--crop-thick) solid #000; border-left: var(--crop-thick) solid #000; }
+        .crop-mark.br { bottom: var(--crop-offset); right: var(--crop-offset); border-bottom: var(--crop-thick) solid #000; border-right: var(--crop-thick) solid #000; }
+        .delete-btn { position: absolute; top: 2px; right: 2px; background: rgba(220,38,38,0.8); color: white; border: none; width: 20px; height: 20px; border-radius: 4px; cursor: pointer; display: none; z-index: 30; font-size: 12px; }
+        .slot:hover .delete-btn { display: block; }
+        .page-label { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.3); color: white; font-size: 8px; padding: 2px 6px; border-radius: 4px; z-index: 50; }
+        .upload-area { border: 2px dashed var(--border-light); padding: 16px; border-radius: 8px; text-align: center; cursor: pointer; transition: 0.2s; background: #F0F2F5; color: var(--text-secondary); }
+        .upload-area.dragover { border-color: var(--whatsapp-green); background: white; }
+        .upload-preview-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .upload-preview-item { position: relative; width: 56px; border-radius: 6px; overflow: hidden; background: #F0F2F5; border: 1px solid var(--border-light); }
+        .upload-preview-item img { width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
+        .upload-preview-item .name { font-size: 7px; text-align: center; padding: 2px; color: var(--text-secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .upload-preview-item .remove-btn { position: absolute; top: 2px; right: 2px; background: rgba(220,38,38,0.8); color: white; border: none; border-radius: 50%; width: 16px; height: 16px; cursor: pointer; font-size: 10px; line-height: 1; }
+        .chat-images-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .chat-image-item { width: 56px; border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; cursor: pointer; position: relative; }
+        .chat-image-item img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+        .chat-image-item .add-btn { position: absolute; bottom: 2px; right: 2px; background: var(--whatsapp-green); color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; }
+
+        /* ===== DRAGGABLE FLOATING BUBBLE (CHAT HEAD) ===== */
+        #floating-bubble {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: var(--whatsapp-green);
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            cursor: pointer;
+            color: white;
+            font-size: 28px;
+            user-select: none;
+            touch-action: none;
+            transition: transform 0.1s;
+        }
+        #floating-bubble:active {
+            transform: scale(0.9);
+        }
+        #floating-bubble .badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            min-width: 20px;
+            height: 20px;
+            padding: 2px 6px;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        @media print {
+            @page { margin: 0 !important; }
+            .no-print { display: none !important; }
+            body, html { background: white !important; height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+            #app-nav, #module-chat, #floating-bubble { display: none !important; }
+            #module-cetak { display: block !important; height: auto !important; overflow: visible !important; background: white !important; }
+            .cetak-sidebar, .cetak-toolbar, .cetak-header .controls, .cetak-header .paper-select, .cetak-header .print-btn { display: none !important; }
+            .cetak-main { display: block !important; }
+            .cetak-content { display: block !important; }
+            .canvas-container { display: flex !important; background: white !important; padding: 0 !important; justify-content: center !important; align-items: center !important; flex-direction: column !important; width: 100% !important; }
+            .paper-page { box-shadow: none !important; margin: 0 auto !important; border: none !important; background: white !important; display: flex !important; justify-content: flex-start !important; align-content: flex-start !important; align-items: flex-start !important; padding: 5mm !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+            .paper-page:not(:last-child) { page-break-after: always !important; break-after: page !important; }
+            .slot:not(.img-mode) { border: 0.2mm dashed #888888 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; justify-content: center !important; align-items: center !important; }
+            .slot.img-mode { border: none !important; }
+            .slot:not(.img-mode) img { margin: auto !important; }
+            .slot.img-mode { position: absolute !important; left: var(--x-print,0) !important; top: var(--y-print,0) !important; width: var(--slot-width,auto) !important; height: var(--slot-height,auto) !important; border: none !important; background: transparent !important; }
+            .slot.img-mode img { display: block !important; width: 100% !important; height: 100% !important; object-fit: fill !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin: 0 !important; }
+            .crop-mark { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: block !important; }
+            .slot.img-mode.no-crop .crop-mark { display: none !important; }
+        }
+        @media (max-width: 768px) {
+            .chat-sidebar { width: 240px; }
+            .cetak-sidebar { width: 240px; }
+            .msg-card { max-width: 85%; }
+            .chat-sidebar-header .user-info .name { max-width: 70px; }
+            .history-modal { max-width: 100%; max-height: 95vh; border-radius: 12px; }
+        }
+        @media (max-width: 480px) {
+            .chat-app-layout { flex-direction: column; }
+            .chat-sidebar { width: 100%; height: 42vh; border-right: none; border-bottom: 1px solid var(--border-light); }
+            .chat-main { height: 58vh; }
+            .cetak-sidebar { width: 100%; height: 42vh; border-right: none; border-bottom: 1px solid var(--border-light); }
+            .cetak-content { height: 58vh; }
+            .login-box { padding: 24px 16px; }
+            .chat-sidebar-header { padding: 8px 12px; min-height: 52px; }
+            .chat-sidebar-header .user-info .name { font-size: 0.75rem; max-width: 60px; }
+            .chat-connect-area { padding: 4px 10px; }
+            .chat-connect-area .input { padding: 4px 10px; font-size: 0.7rem; height: 30px; }
+            .chat-connect-area .btn { padding: 4px 10px; font-size: 0.65rem; height: 30px; }
+            .chat-search-area { padding: 4px 10px; }
+            .chat-search-area .input { font-size: 0.65rem; height: 26px; padding: 3px 8px; }
+            .chat-sidebar-footer .btn { font-size: 0.6rem; padding: 4px 8px; min-height: 26px; }
+            .chat-header { padding: 6px 12px; min-height: 48px; }
+            .chat-header .left .avatar { width: 30px; height: 30px; font-size: 0.8rem; }
+            .chat-header .left .info .name { font-size: 0.75rem; }
+            .chat-messages { padding: 8px 12px; }
+            .msg-card { max-width: 90%; padding: 4px 10px; }
+            .msg-card .msg-body { font-size: 0.75rem; }
+            .chat-input { padding: 4px 10px 8px; }
+            .chat-input .job-row { padding: 4px 8px; }
+            .chat-input .input-actions .btn { font-size: 0.6rem; padding: 4px 10px; min-height: 26px; }
+            .cetak-header h1 { font-size: 0.9rem; }
+            .cetak-header { padding: 6px 12px; }
+            .paper-select { font-size: 10px; padding: 2px 8px; }
+            .print-btn { font-size: 0.8rem; padding: 4px 14px; }
+            .cetak-sidebar-scroll { padding: 8px; }
+            .cetak-sidebar-scroll select { padding: 4px; border-radius: 4px; background: #f0f2f5; border: 1px solid var(--border-light); }
+            .cetak-tab-btn { font-size: 9px; padding: 6px 2px; }
+            .history-modal-header h2 { font-size: 0.9rem; }
+            .history-modal-toolbar { padding: 8px 16px; }
+            .history-modal-body { padding: 12px 16px; }
+            .history-date-header .date-label { font-size: 0.75rem; }
+        }
+        @media (max-width: 380px) {
+            .chat-sidebar-header .user-info .name { max-width: 40px; font-size: 0.65rem; }
+            .chat-sidebar-header .avatar { width: 26px; height: 26px; font-size: 0.7rem; }
+            .chat-connect-area .btn { font-size: 0.55rem; padding: 4px 8px; }
+            .chat-connect-area .input { font-size: 0.65rem; padding: 4px 8px; }
+        }
+        .pdf-badge { background: #ef4444; color: white; border-radius: 4px; padding: 1px 8px; font-size: 0.5rem; font-weight: 700; margin-left: 4px; }
+        /* ===== TAMBAHAN UNTUK LOG TABEL ===== */
+        .log-table-container { overflow-x: auto; margin-top: 8px; }
+        .log-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .log-table th { background: var(--whatsapp-dark); color: white; padding: 4px 6px; text-align: left; }
+        .log-table td { padding: 4px 6px; border-bottom: 1px solid var(--border-light); }
+        .log-table tr:hover { background: #f0f2f5; }
+        .log-entry-icon { cursor: pointer; font-size: 16px; display: inline-block; margin-right: 6px; }
+        .log-detail-row { display: none; background: #fafafa; }
+        .log-detail-row.open { display: table-row; }
+        .log-detail-cell { padding: 8px 12px; background: #f8f9fa; }
+        .log-detail-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+        .log-detail-table th { background: #e9ecef; color: #1a1a1a; padding: 3px 5px; text-align: left; }
+        .log-detail-table td { padding: 3px 5px; border-bottom: 1px solid #dee2e6; }
+        /* ===== SERVER OCR STATUS ===== */
+        .ocr-server-status {
+            display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+            background: #f0f2f5; border-radius: 8px; margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .ocr-server-status .label { font-size: 12px; font-weight: 600; }
+        .ocr-server-status .status { font-weight: 700; font-size: 12px; }
+        .ocr-server-status .status.connected { color: #10b981; }
+        .ocr-server-status .status.disconnected { color: #ef4444; }
+        .ocr-server-status .status.checking { color: #f59e0b; }
+        .ocr-server-status .btn-check { background: var(--whatsapp-light); color: white; border: none; padding: 2px 12px; border-radius: 12px; font-size: 11px; cursor: pointer; }
+        .ocr-server-status .btn-check:active { transform: scale(0.95); }
+        .ocr-server-status label { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+    </style>
+</head>
+<body>
+
+    <!-- ===== NAVBAR TAB ===== -->
+    <div id="app-nav" class="no-print">
+        <button class="tab-btn active" onclick="switchModule('chat')" id="tab-chat">💬 Chat</button>
+        <button class="tab-btn" onclick="switchModule('cetak')" id="tab-cetak">🖨️ Cetak Resi</button>
+    </div>
+
+    <!-- ===== MODUL CHAT ===== -->
+    <div id="module-chat" class="active">
+        <div id="chat-login-screen">
+            <div class="login-box">
+                <div class="logo">💬 Think Flow</div>
+                <div class="sub">P2P Data Exchange</div>
+                <input type="text" id="login-name" class="input" placeholder="Masukkan nama / ID Anda..." value="">
+                <button class="btn" onclick="doLogin()">MASUK</button>
+                <div class="hint">Gunakan ID unik untuk terhubung dengan partner.</div>
+            </div>
+        </div>
+        <div id="chat-app">
+            <div class="chat-app-layout">
+                <div class="chat-sidebar">
+                    <div class="chat-sidebar-header">
+                        <div class="user"><div class="avatar" id="my-avatar">T</div><div class="user-info"><div class="name" id="my-id">...</div><div class="status"><span class="dot" id="my-status-dot"></span><span id="my-status">Offline</span></div></div></div>
+                        <div class="chat-sidebar-actions"><button class="btn-icon" onclick="refreshApp()">⟳</button><button class="btn-icon" onclick="logout()" style="color:#ff6b6b;">✕</button></div>
+                    </div>
+                    <div class="chat-connect-area"><input type="text" id="target-id" class="input" placeholder="ID partner..."><button class="btn" onclick="connectPeer()">Hubung</button></div>
+                    <div class="chat-search-area"><span class="search-icon">🔍</span><input type="text" id="chat-search-input" class="input" placeholder="Cari pesan..." oninput="applySearchFilter()"><button class="clear-search" id="clear-search-btn" onclick="clearSearch()">✕</button></div>
+                    <div class="chat-peer-list-container"><div class="label">Daftar Obrolan</div><div id="peer-list"><div class="chat-peer-empty">— belum ada koneksi —</div></div></div>
+                    <div class="chat-sidebar-footer"><button class="btn" onclick="changeId()">🔄 Ganti ID</button><button class="btn" onclick="refreshApp()">⟳ Refresh</button><button class="btn danger" onclick="logout()">🚪 Keluar</button></div>
+                </div>
+                <div class="chat-main">
+                    <div class="chat-header"><div class="left"><div class="avatar" style="background:var(--whatsapp-dark)">📢</div><div class="info"><div class="name">Broadcast (Semua Partner)</div><div class="sub" id="peer-count">0 terhubung</div></div></div><div class="right"><span style="font-size:0.6rem;color:var(--text-secondary);" id="msg-count">0</span><button class="btn-icon history-btn" onclick="openHistoryModal()" title="Riwayat Chat">📜</button><button class="btn-icon print-resi" onclick="sendAllToCetak('resi')" title="Cetak semua gambar sebagai Resi">🖨️</button><button class="btn-icon print-gambar" onclick="sendAllToCetak('gambar')" title="Cetak semua gambar sebagai Gambar">🖼️</button><button class="btn-icon" onclick="clearTimeline()" title="Hapus semua pesan">🗑</button></div></div>
+                    <div class="chat-messages" id="stream-area"><div class="empty-state" id="empty-state">📭 Belum ada data. Hubungkan ke partner dan kirim data dari bawah.</div></div>
+                    <div class="chat-input"><div class="job-list" id="job-list"></div><div class="input-actions"><button class="btn btn-outline" onclick="addJob()">➕ Tambah</button><button class="btn btn-outline" onclick="document.getElementById('file-input').click()">📎 File</button><button class="btn btn-primary" onclick="sendData()">⚡ Kirim</button><input type="file" id="file-input" multiple accept="image/*,application/pdf" hidden onchange="handleFileSelect(this)"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== HISTORY MODAL ===== -->
+    <div class="history-overlay" id="history-overlay">
+        <div class="history-modal">
+            <div class="history-modal-header"><h2>📜 Riwayat Chat</h2><button class="close-btn" onclick="closeHistoryModal()">✕</button></div>
+            <div class="history-modal-toolbar"><button class="btn btn-pdf-all" onclick="exportAllHistoryPDF()">📄 Semua ke PDF</button><span style="font-size:0.65rem;color:var(--text-secondary);margin-left:auto;" id="history-total-msg">0 pesan</span></div>
+            <div class="history-modal-body" id="history-modal-body"><div class="history-empty">Belum ada pesan.</div></div>
+        </div>
+    </div>
+
+    <!-- ===== MODUL CETAK ===== -->
+    <div id="module-cetak">
+        <header class="cetak-header no-print">
+            <h1 id="cetak-title">STUDIO CETAK RESI</h1>
+            <div class="cetak-controls">
+                <div class="paper-select"><span>KERTAS:</span><select id="paperType"><option value="A4">A4 (210x297mm)</option><option value="A3">A3 (297x420mm)</option><option value="A3+">A3+ (329x483mm)</option><option value="custom">Karso</option></select><span id="customDim" style="display:none;"><input type="number" id="custW" value="210" style="width:50px"> x <input type="number" id="custH" value="297" style="width:50px"> mm</span></div>
+                <button class="print-btn" id="printBtn" onclick="triggerPrint()">CETAK</button>
+            </div>
+        </header>
+        <div class="cetak-main">
+            <aside class="cetak-sidebar no-print">
+                <nav class="cetak-tab-nav">
+                    <button class="cetak-tab-btn active" onclick="openCetakTab('resi')">NYETAK RESI <span id="resiBadge" class="badge" style="background:#ef4444;color:white;border-radius:50%;padding:0 8px;font-size:9px;">0</span></button>
+                    <button class="cetak-tab-btn" onclick="openCetakTab('image')">NYETAK GAMBAR</button>
+                    <button class="cetak-tab-btn" onclick="openCetakTab('history')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> HISTORI <span id="historyBadge" class="badge" style="background:#8b5cf6;color:white;border-radius:50%;padding:0 8px;font-size:9px;margin-left:4px;">0</span></button>
+                </nav>
+                <!-- Tab Resi -->
+                <div id="cetak-tab-resi" class="cetak-tab-content active">
+                    <div class="cetak-sidebar-scroll">
+                        <!-- SERVER OCR STATUS -->
+                        <div class="ocr-server-status">
+                            <span class="label">🔍 Server OCR:</span>
+                            <span class="status checking" id="ocrServerStatus">⏳ Mengecek...</span>
+                            <button class="btn-check" onclick="checkPaddleOCRServer()">↻ Cek</button>
+                            <button class="btn-check" onclick="changeOcrUrl()" style="background: #3b82f6;">⚙️ Set IP</button>
+                            <label>
+                                <input type="checkbox" id="usePaddleOCR" checked> Gunakan PaddleOCR (jika aktif)
+                            </label>
+                        </div>
+
+                        <div class="slider-group"><label>Lebar Resi (mm)</label><div class="numeric-input"><input type="range" id="resiWidthRange" min="20" max="210" value="100"><input type="number" id="resiWidthNum" value="100"></div></div>
+                        <div class="slider-group"><label>Tinggi Resi (mm)</label><div class="numeric-input"><input type="range" id="resiHeightRange" min="20" max="297" value="150"><input type="number" id="resiHeightNum" value="150"></div></div>
+                        <div class="info-box"><div>Kapasitas/Hal: <span id="resiCapacity">0</span></div><div>Total Item: <span id="resiTotal">0</span></div></div>
+                        <br>
+                        <button class="btn-blue" style="width:100%" onclick="document.getElementById('pdfInp').click()">+ UPLOAD PDF RESI</button>
+                        <button class="btn-blue" style="width:100%; margin-top: 6px; background: #10b981;" onclick="exportActiveResiExcel()">📊 EXPORT RESI AKTIF KE EXCEL</button>
+                        <input type="file" id="pdfInp" multiple accept="application/pdf" style="display:none">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; margin-bottom:4px;">
+                            <span style="font-size:10px; font-weight:bold; color:var(--whatsapp-dark);">📂 RIWAYAT UPLOAD</span>
+                            <button class="btn-red" style="padding:2px 10px; font-size:9px;" onclick="clearUploadedHistory()">🗑 Hapus Semua</button>
+                        </div>
+                        <div id="resiHistory" class="history-list"></div>
+                    </div>
+                </div>
+                <!-- Tab Image -->
+                <div id="cetak-tab-image" class="cetak-tab-content">
+                    <div class="cetak-sidebar-scroll">
+                        <div class="slider-group"><label>Upload Gambar Sendiri</label><div class="upload-area" id="uploadArea" onclick="document.getElementById('imgUpload').click()"><div class="icon">📁</div><p style="font-size:11px;">Klik atau tarik gambar ke sini</p><p style="font-size:9px; color:#64748b;">JPG, PNG, WEBP (max 10MB)</p></div><input type="file" id="imgUpload" multiple accept="image/*" style="display:none"><div id="uploadPreview" class="upload-preview-list"></div></div>
+                        <div class="slider-group"><label>Ukuran (W x H mm)</label><div class="numeric-input"><input type="number" id="imgW" value="50"><span>x</span><input type="number" id="imgH" value="50"></div></div>
+                        <div class="slider-group"><label>Jarak / Gap (mm) — hanya tampilan, saat print dihilangkan</label><div class="numeric-input"><input type="number" id="imgGap" value="0" min="0"></div></div>
+                        <div class="slider-group"><label>Panjang Kres (mm)</label><div class="numeric-input"><input type="range" id="cropLen" min="2" max="15" value="5" step="0.5"><input type="number" id="cropLenNum" value="5" step="0.5"></div></div>
+                        <div class="slider-group"><label>Tebal Kres (mm)</label><div class="numeric-input"><input type="range" id="cropThick" min="0.1" max="1" value="0.2" step="0.05"><input type="number" id="cropThickNum" value="0.2" step="0.05"></div></div>
+                        <div class="slider-group"><label>Offset Kres (mm) — jarak dari sudut</label><div class="numeric-input"><input type="range" id="cropOffset" min="0" max="5" value="0" step="0.5"><input type="number" id="cropOffsetNum" value="0" step="0.5"></div></div>
+                        <div class="slider-group"><label><input type="checkbox" id="showCrop" checked> Tampilkan Kres</label></div>
+                        <div class="asset-grid-title">TINGGAL MILIH <button class="btn-blue" style="padding:2px 8px; font-size:9px" onclick="loadAssets()">MUAT</button></div>
+                        <div id="assetGrid" class="asset-grid"></div>
+                        <div class="asset-grid-title" style="margin-top:16px; border-top:2px solid #3b82f6;">📩 GAMBAR DARI CHAT <span id="chatImageCount" style="font-size:9px;color:var(--text-secondary);">0</span></div>
+                        <div id="chatImagesContainer" class="chat-images-list"><div style="color:var(--text-secondary); font-size:10px; padding:8px 0;">Belum ada gambar dari chat.</div></div>
+                    </div>
+                </div>
+                <!-- Tab History -->
+                <div id="cetak-tab-history" class="cetak-tab-content">
+                    <div class="cetak-sidebar-scroll">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #334155; padding-bottom:6px; flex-wrap:wrap; gap:6px;">
+                            <span style="font-size:10px; font-weight:bold; color:var(--whatsapp-dark); text-transform:uppercase;">LOG CETAK RESI</span>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn-pdf-history" onclick="exportPrintHistoryPDF()">📄 Save as PDF</button>
+                                <button class="btn-pdf-history" onclick="exportPrintHistoryExcel()" style="background:#10b981;">📊 Save as Excel</button>
+                                <button onclick="clearPrintHistory()" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">HAPUS SEMUA</button>
+                            </div>
+                        </div>
+                        
+                        <!-- KOLOM PENCARIAN HISTORI CETAK -->
+                        <div style="display: flex; align-items: center; gap: 6px; background: #F0F2F5; border: 1px solid var(--border-light); border-radius: 8px; padding: 6px 10px; margin-bottom: 12px;">
+                            <span style="font-size: 12px; color: var(--text-secondary);">🔍</span>
+                            <input type="text" id="history-search-input" placeholder="Cari No. Resi / Pesanan / Pengirim..." oninput="applyHistorySearchFilter()" style="flex: 1; border: none; background: transparent; font-size: 11px; outline: none; font-family: 'Inter', sans-serif;">
+                            <button onclick="clearHistorySearch()" style="background: none; border: none; color: #ccc; font-size: 11px; cursor: pointer;">✕</button>
+                        </div>
+
+                        <div style="background:#F0F2F5; border:1px solid var(--border-light); border-radius:8px; padding:8px 12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="font-size:9px; color:var(--text-secondary); font-weight:bold; text-transform:uppercase; display:flex; align-items:center; gap:6px;"><span style="font-size:12px;">📅</span> TOTAL RESI HARI INI</div>
+                            <span id="totalResiToday" style="font-size:18px; font-weight:900; color:#10b981;">0</span>
+                        </div>
+                        <div id="historyLogList"></div>
+                    </div>
+                </div>
+            </aside>
+            <main class="cetak-content">
+                <div class="cetak-toolbar no-print"><button class="btn-red" onclick="clearCanvas()">RESET LAYAR</button><span id="pageCounter" style="color:var(--text-secondary); font-size:11px; margin-left:auto;">Item: 0 | Halaman: 0</span></div>
+                <div id="canvas-resi" class="canvas-container active"></div>
+                <div id="canvas-image" class="canvas-container"></div>
+            </main>
+        </div>
+    </div>
+
+    <!-- ===== BUBBLE CHAT MELAYANG (FLOATING BUBBLE) ===== -->
+    <div id="floating-bubble" style="display: none;">
+        💬
+        <div class="badge" id="bubble-badge" style="display: none;">0</div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  SHARED STATE & CHAT MODUL
+        // ============================================================
+        let sharedImages = [];
+        let chat_myId = localStorage.getItem('tfl_id') || 'TFL-' + Math.floor(Math.random() * 9000 + 1000);
+        localStorage.setItem('tfl_id', chat_myId);
+        let peer = null, conns = [], jobs = [{ files: [], inv: '', ket: '' }];
+        let activeJobIdx = 0, messageHistory = [], msgIdCounter = 0, searchQuery = '';
+        let historySearchQuery = ''; // Filter pencarian histori cetak resi
+        
+        let activeChatId = 'broadcast'; // Menentukan chatroom aktif ('broadcast' atau 'peer-id')
+        let unreadCounts = {}; // Menyimpan jumlah pesan belum terbaca berdasarkan chatroom
+
+        function saveMessageHistory() { try { localStorage.setItem('tfl_messageHistory', JSON.stringify(messageHistory)); } catch (e) {} }
+        function loadMessageHistory() {
+            const stored = localStorage.getItem('tfl_messageHistory');
+            if (stored) try {
+                messageHistory = JSON.parse(stored);
+                sharedImages = [];
+                messageHistory.forEach(msg => { if (msg.jobs) msg.jobs.forEach(job => { if (job.files) job.files.forEach(file => { if (file.type && file.type.startsWith('image/')) sharedImages.push({ id: Date.now() + Math.random(), src: file.data, name: file.name, from: msg.type === 'out' ? 'Anda' : (msg.sender || 'Unknown'), timestamp: msg.timestamp || Date.now() }); }); }); });
+                let maxUid = 0; messageHistory.forEach(m => { if (m._uid && m._uid > maxUid) maxUid = m._uid; });
+                msgIdCounter = maxUid || messageHistory.length;
+            } catch (e) { messageHistory = []; sharedImages = []; msgIdCounter = 0; } else { messageHistory = []; sharedImages = []; msgIdCounter = 0; }
+            renderMessageHistory(); updateChatImagesUI();
+        }
+
+        // ============================================================
+        //  NADA BEEP / NOTIFIKASI SUARA (WEB AUDIO API)
+        // ============================================================
+        function playTone(type) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'connect') {
+                    osc.frequency.setValueAtTime(800, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    osc.start();
+                    osc.frequency.setValueAtTime(1000, ctx.currentTime + 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                    osc.stop(ctx.currentTime + 0.35);
+                } else if (type === 'send') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(600, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    osc.start();
+                    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.15);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+                    osc.stop(ctx.currentTime + 0.2);
+                } else if (type === 'receive') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    osc.start();
+                    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.stop(ctx.currentTime + 0.6);
+                } else if (type === 'disconnect') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    osc.start();
+                    osc.frequency.linearRampToValueAtTime(150, ctx.currentTime + 0.3);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                    osc.stop(ctx.currentTime + 0.35);
+                }
+            } catch (_) {}
+        }
+
+        // ============================================================
+        //  NOTIFIKASI SISTEM (HTML5 BROWSER NOTIFICATIONS)
+        // ============================================================
+        function requestNotificationPermission() {
+            if (window.Notification && Notification.permission !== 'denied' && Notification.permission !== 'granted') {
+                Notification.requestPermission();
+            }
+        }
+        function showSystemNotification(title, body) {
+            if (window.Notification && Notification.permission === 'granted') {
+                try {
+                    new Notification(title, {
+                        body: body,
+                        icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij48cGF0aCBmaWxsPSIjMjVEMzY2IiBkPSJNMjQgNEMxMi45NSA0IDQgMTIuOTUgNCAyNGMwIDMuODggMS4xMSA3LjUgMy4wMyAxMC41OEw1IDQzbDguNzMtMi4wM0MyNy4yOCA0OS4zMyA0NCAzOS45MSA0NCAyNEM0NCAxMi45NSAzNS4wNSA0IDI0IDR6Ii8+PC9zdmc+'
+                    });
+                } catch (e) {
+                    console.warn("Gagal menampilkan notifikasi sistem: ", e);
+                }
+            }
+        }
+
+        function doLogin() { 
+            const name = document.getElementById('login-name').value.trim(); 
+            if (name) { 
+                chat_myId = name.replace(/\s+/g, '-'); 
+                localStorage.setItem('tfl_id', chat_myId); 
+            } 
+            document.getElementById('chat-login-screen').classList.add('hidden'); 
+            document.getElementById('chat-app').classList.add('active'); 
+            document.getElementById('my-id').innerText = chat_myId; 
+            document.getElementById('my-avatar').innerText = chat_myId.charAt(0).toUpperCase(); 
+            initPeer(); 
+            renderJobs(); 
+            loadMessageHistory(); 
+            updatePeerList(); 
+            requestNotificationPermission();
+            const saved = sessionStorage.getItem('tfl_jobs'); 
+            if (saved) { 
+                try { 
+                    const parsed = JSON.parse(saved); 
+                    if (parsed.length) jobs = parsed; 
+                    renderJobs(); 
+                } catch (_) {} 
+            } 
+            reconnectSavedPeers(); 
+            
+            // Tampilkan ikon sembul melayang
+            document.getElementById('floating-bubble').style.display = 'flex';
+            // Muat posisi bubble yang tersimpan
+            const savedLeft = localStorage.getItem('bubbleLeft');
+            const savedTop = localStorage.getItem('bubbleTop');
+            if (savedLeft && savedTop) {
+                const bubble = document.getElementById('floating-bubble');
+                bubble.style.left = savedLeft;
+                bubble.style.top = savedTop;
+                bubble.style.right = 'auto';
+                bubble.style.bottom = 'auto';
+            }
+        }
+        
+        (function autoLogin() { const stored = localStorage.getItem('tfl_id'); if (stored) { document.getElementById('login-name').value = stored; setTimeout(doLogin, 100); } })();
+        function logout() { if (peer) peer.destroy(); localStorage.removeItem('tfl_id'); localStorage.removeItem('tfl_peers'); localStorage.removeItem('tfl_messageHistory'); sessionStorage.removeItem('tfl_jobs'); location.reload(); }
+        function refreshApp() { 
+            sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); 
+            const peerIds = conns.map(c => c.peer); 
+            localStorage.setItem('tfl_peers', JSON.stringify(peerIds)); 
+            if (peer) { 
+                peer.destroy(); 
+                conns.forEach(c => c.close()); 
+                conns = []; 
+            } 
+            initPeer(); 
+            showToast('🔄 Refresh, menyambung ulang...'); 
+        }
+        function changeId() { const password = prompt("Masukkan password untuk mengganti ID:"); if (password !== "gantisaja") { alert("Password salah!"); return; } const newId = prompt("Masukkan ID baru:"); if (!newId) return; if (newId === chat_myId) { alert("ID sama dengan yang sekarang."); return; } if (peer) peer.destroy(); localStorage.setItem('tfl_id', newId); chat_myId = newId; conns = []; messageHistory = []; saveMessageHistory(); document.getElementById('my-id').innerText = chat_myId; document.getElementById('my-avatar').innerText = chat_myId.charAt(0).toUpperCase(); initPeer(); showToast('✅ ID diubah menjadi: ' + chat_myId); loadMessageHistory(); }
+        
+        // ============================================================
+        //  PEERJS CONNECTION DENGAN STUN + TURN SERVER (untuk tembus firewall)
+        // ============================================================
+        function initPeer() {
+            if (peer) { peer.destroy(); conns.forEach(c => c.close()); conns = []; }
+            
+            // Konfigurasi ICE Servers dengan STUN dan TURN publik
+            const peerConfig = { 
+                debug: 1, 
+                config: { 
+                    iceServers: [
+                        // STUN servers
+                        { urls: 'stun:stun.l.google.com:19302' }, 
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' },
+                        { urls: 'stun:stun.ekiga.net' },
+                        { urls: 'stun:stun.ideasip.com' },
+                        { urls: 'stun:stun.rixtelecom.se' },
+                        // TURN servers (relay) - gratis dari openrelay.metered.ca
+                        { 
+                            urls: [
+                                'turn:openrelay.metered.ca:80',
+                                'turn:openrelay.metered.ca:443',
+                                'turn:openrelay.metered.ca:3478'
+                            ],
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        }
+                    ] 
+                } 
+            };
+            peer = new Peer(chat_myId, peerConfig);
+            peer.on('open', () => { 
+                updateStatus('ready'); 
+                showToast('✅ Siap! ID: ' + chat_myId); 
+                reconnectSavedPeers(); 
+            });
+            peer.on('connection', conn => setupConn(conn));
+            peer.on('error', err => {
+                console.error('Peer error:', err);
+                // Jangan ubah status ke error jika hanya peer-unavailable
+                if (err.type === 'peer-unavailable') {
+                    showToast('⚠️ Partner tidak ditemukan!', 'error');
+                } else if (err.type === 'network') {
+                    showToast('⚠️ Masalah jaringan, coba refresh', 'error');
+                    updateStatus('offline');
+                } else {
+                    showToast('❌ Error: ' + err.message, 'error');
+                    updateStatus('error');
+                }
+            });
+            peer.on('disconnected', () => {
+                updateStatus('offline');
+                showToast('⚠️ Terputus, mencoba sambung ulang...', 'error');
+                setTimeout(() => { if (peer && !peer.destroyed) peer.reconnect(); }, 3000);
+            });
+        }
+        function reconnectSavedPeers() { 
+            const saved = localStorage.getItem('tfl_peers'); 
+            if (!saved) return; 
+            try { 
+                const peers = JSON.parse(saved); 
+                peers.forEach(pid => { 
+                    if (pid !== chat_myId && !conns.find(c => c.peer === pid)) { 
+                        const conn = peer.connect(pid, { reliable: true }); 
+                        setupConn(conn); 
+                    } 
+                }); 
+                localStorage.removeItem('tfl_peers'); 
+            } catch (_) {} 
+        }
+        function connectPeer() {
+            const tid = document.getElementById('target-id').value.trim();
+            if (!tid || tid === chat_myId) return showToast('⚠️ ID tidak valid', 'error');
+            if (conns.find(c => c.peer === tid)) return showToast('⚠️ Sudah terhubung', 'error');
+            // Jangan ubah status global, cukup toast
+            const conn = peer.connect(tid, { reliable: true });
+            setupConn(conn);
+            document.getElementById('target-id').value = '';
+            savePeerList();
+        }
+        
+        function setupConn(conn) {
+            conn.on('open', () => {
+                if (!conns.find(c => c.peer === conn.peer)) {
+                    conns.push(conn);
+                    updatePeerList();
+                    showToast('⚡ Terhubung: ' + conn.peer);
+                    playTone('connect');
+                    showSystemNotification('Partner Terkoneksi', `ID: ${conn.peer} telah sukses tersambung.`);
+                    savePeerList();
+                }
+            });
+            conn.on('data', data => {
+                console.log('📩 Data dari', conn.peer, data);
+                handleData(data, conn.peer);
+            });
+            conn.on('close', () => {
+                conns = conns.filter(c => c.peer !== conn.peer);
+                if (activeChatId === conn.peer) {
+                    activeChatId = 'broadcast';
+                    selectChat('broadcast');
+                }
+                updatePeerList();
+                savePeerList();
+                showToast('🔌 Terputus: ' + conn.peer, 'error');
+                playTone('disconnect');
+                showSystemNotification('Partner Terputus', `ID: ${conn.peer} telah kehilangan koneksi.`);
+            });
+            conn.on('error', (err) => {
+                // Hanya tampilkan toast, jangan ubah status global
+                console.warn('Koneksi error dengan', conn.peer, err);
+                if (err.message && err.message.includes('peer unavailable')) {
+                    showToast('❌ Gagal terhubung ke ' + conn.peer, 'error');
+                    conn.close();
+                } else {
+                    showToast('⚠️ Error koneksi dengan ' + conn.peer, 'error');
+                }
+            });
+        }
+        function savePeerList() { const ids = conns.map(c => c.peer); localStorage.setItem('tfl_peers', JSON.stringify(ids)); }
+        function updateStatus(s) { const dot = document.getElementById('my-status-dot'); const txt = document.getElementById('my-status'); dot.className = 'dot' + (s === 'ready' || s === 'connected' ? ' online' : ''); txt.innerText = s.toUpperCase(); }
+        
+        // ============================================================
+        //  DAFTAR CHAT & UNREAD BADGES ENGINE (WHATSAPP-LIKE)
+        // ============================================================
+        function updatePeerList() { 
+            const list = document.getElementById('peer-list'); 
+            const countEl = document.getElementById('peer-count'); 
+            
+            if (countEl) countEl.innerText = conns.length + ' terhubung'; 
+            
+            let listHtml = '';
+            
+            // 1. Tombol Permanen Broadcast (Semua Partner)
+            const activeBcastClass = (activeChatId === 'broadcast') ? 'active-chat-item' : '';
+            const unreadBcast = unreadCounts['broadcast'] || 0;
+            const bcastBadge = unreadBcast > 0 ? `<span class="unread-count">${unreadBcast}</span>` : '';
+            
+            const bcastMsgs = messageHistory.filter(m => m.isBroadcast || !m.target || m.target === 'broadcast');
+            const lastBcastText = bcastMsgs.length ? getLastMsgSnippet(bcastMsgs[bcastMsgs.length - 1]) : 'Kirim pesan ke seluruh partner';
+            
+            listHtml += `
+                <div class="chat-peer-item ${activeBcastClass}" onclick="selectChat('broadcast')">
+                    <div class="avatar" style="background:var(--whatsapp-dark)">📢</div>
+                    <div class="info">
+                        <div class="name">Broadcast (Semua Partner)</div>
+                        <div class="status-text">${lastBcastText}</div>
+                    </div>
+                    ${bcastBadge}
+                    <span class="online-dot"></span>
+                </div>
+            `;
+            
+            // 2. Daftar Chat Room Privat
+            if (conns.length > 0) {
+                conns.forEach(c => {
+                    const activeClass = (activeChatId === c.peer) ? 'active-chat-item' : '';
+                    const unreadVal = unreadCounts[c.peer] || 0;
+                    const unreadBadge = unreadVal > 0 ? `<span class="unread-count">${unreadVal}</span>` : '';
+                    
+                    const privateMsgs = messageHistory.filter(m => 
+                        !m.isBroadcast && (
+                            (m.sender === c.peer && m.target === chat_myId) || 
+                            (m.sender === chat_myId && m.target === c.peer)
+                        )
+                    );
+                    const lastMsgText = privateMsgs.length ? getLastMsgSnippet(privateMsgs[privateMsgs.length - 1]) : 'Privat chat';
+
+                    listHtml += `
+                        <div class="chat-peer-item ${activeClass}" onclick="selectChat('${c.peer}')">
+                            <div class="avatar">${c.peer.charAt(0).toUpperCase()}</div>
+                            <div class="info">
+                                <div class="name">${c.peer}</div>
+                                <div class="status-text">${lastMsgText}</div>
+                            </div>
+                            ${unreadBadge}
+                            <span class="online-dot"></span>
+                            <button class="remove-btn" onclick="disconnectPeer('${c.peer}', event)">✕</button>
+                        </div>
+                    `;
+                });
+            } else {
+                listHtml += '<div class="chat-peer-empty">— Hubungkan ID partner untuk chat privat —</div>';
+            }
+            
+            list.innerHTML = listHtml;
+            updateStatus(conns.length ? 'connected' : 'ready'); 
+        }
+
+        function getLastMsgSnippet(msg) {
+            if (!msg || !msg.jobs || !msg.jobs.length) return '';
+            const firstJob = msg.jobs[0];
+            if (firstJob.inv) return `INV: ${firstJob.inv}`;
+            if (firstJob.ket) return firstJob.ket.substring(0, 18) + (firstJob.ket.length > 18 ? '...' : '');
+            if (firstJob.files && firstJob.files.length) return `📎 File: ${firstJob.files[0].name}`;
+            return 'Mengirim data...';
+        }
+
+        function selectChat(chatId) {
+            activeChatId = chatId;
+            
+            // Hapus unread di ruangan ini
+            unreadCounts[chatId] = 0;
+            updateUnreadBadges();
+            
+            // Update UI sidebar
+            updatePeerList();
+            
+            // Update Header Obrolan Utama
+            const hAvatar = document.querySelector('.chat-main .chat-header .left .avatar');
+            const hName = document.querySelector('.chat-main .chat-header .left .info .name');
+            const hSub = document.querySelector('.chat-main .chat-header .left .info .sub');
+            
+            if (chatId === 'broadcast') {
+                hAvatar.innerText = "📢";
+                hAvatar.style.background = "var(--whatsapp-dark)";
+                hName.innerText = "Broadcast (Semua Partner)";
+                hSub.innerText = conns.length + " partner terhubung";
+            } else {
+                hAvatar.innerText = chatId.charAt(0).toUpperCase();
+                hAvatar.style.background = "var(--whatsapp-light)";
+                hName.innerText = chatId;
+                hSub.innerText = "Obrolan Privat";
+            }
+            
+            renderMessageHistory();
+        }
+
+        function updateUnreadBadges() {
+  let total = 0;
+  Object.keys(unreadCounts).forEach(k => { total += unreadCounts[k] || 0; });
+  
+  // 1. Update Floating Bubble di dalam aplikasi utama (jika ada)
+  const fBadge = document.getElementById('bubble-badge');
+  if (fBadge) {
+    if (total > 0) {
+      fBadge.innerText = total;
+      fBadge.style.display = 'flex';
+    } else {
+      fBadge.style.display = 'none';
+    }
+  }
+  
+  // 2. Update Tab Chat Badge
+  let tabBadge = document.getElementById('tab-chat-badge');
+  if (total > 0) {
+    if (!tabBadge) {
+      const btn = document.getElementById('tab-chat');
+      btn.innerHTML = `💬 Chat <span class="tab-badge" id="tab-chat-badge">${total}</span>`;
+    } else {
+      tabBadge.innerText = total;
+    }
+  } else {
+    if (tabBadge) tabBadge.remove();
+  }
+
+  // 3. SIMPAN KE LOCALSTORAGE UNTUK BUBBLE EKSTERNAL (dalam bentuk object)
+  try {
+    localStorage.setItem('tfl_unread', JSON.stringify(unreadCounts));
+  } catch (e) {}
+}
+
+        function disconnectPeer(pid, event) { 
+            if (event) event.stopPropagation();
+            const c = conns.find(x => x.peer === pid); 
+            if (c) c.close(); 
+            if (activeChatId === pid) activeChatId = 'broadcast';
+            savePeerList(); 
+        }
+        function getConnectedPeers() { return conns.filter(c => c.open).map(c => c.peer); }
+        function addJob() { jobs.push({ files: [], inv: '', ket: '' }); activeJobIdx = jobs.length - 1; renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); }
+        function removeJob(idx) { if (jobs.length > 1) { jobs.splice(idx, 1); if (activeJobIdx >= jobs.length) activeJobIdx = jobs.length - 1; renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); } else showToast('⚠️ Minimal satu baris!', 'error'); }
+        function triggerFileSelect(idx) { activeJobIdx = idx; document.getElementById('file-input').click(); }
+        async function handleFileSelect(input) { if (!input.files.length || activeJobIdx === null || activeJobIdx >= jobs.length) return; const MAX_SIZE = 5 * 1024 * 1024; for (const file of input.files) { const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'); if (file.size > MAX_SIZE) { showToast(`⚠️ "${file.name}" > 5 MB`, 'error'); continue; } try { const data = await toBase64(file); jobs[activeJobIdx].files.push({ data, name: file.name, type: file.type || (isPdf ? 'application/pdf' : 'application/octet-stream'), isPdf }); } catch (e) { console.error('File read error', e); } } renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); input.value = ''; }
+        function removeFile(jIdx, fIdx) { if (jobs[jIdx] && jobs[jIdx].files) { jobs[jIdx].files.splice(fIdx, 1); renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); } }
+        function renderJobs() { const list = document.getElementById('job-list'); list.innerHTML = ''; jobs.forEach((job, idx) => { const row = document.createElement('div'); row.className = 'job-row'; const thumbs = job.files.map((f, fIdx) => { const isPdf = f.isPdf || (f.name && f.name.toLowerCase().endsWith('.pdf')); if (isPdf) return `<div class="thumb-box" style="display:flex;align-items:center;justify-content:center;background:#fee2e2;font-size:1.2rem;">📄<div class="del" onclick="removeFile(${idx}, ${fIdx})">×</div></div>`; return `<div class="thumb-box"><img src="${f.data}" onerror="this.style.display='none'; this.parentElement.style.background='#eee';"><div class="del" onclick="removeFile(${idx}, ${fIdx})">×</div></div>`; }).join(''); row.innerHTML = `<div class="top"><span class="label">BARIS ${idx+1}</span><button class="remove-job" onclick="removeJob(${idx})">🗑</button></div><div class="thumb-row">${thumbs}<div class="add-thumb" onclick="triggerFileSelect(${idx})">+</div></div><input type="text" class="input" placeholder="No. Invoice (INV)" value="${escapeHtml(job.inv)}" oninput="jobs[${idx}].inv = this.value; sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs));"><textarea class="input" placeholder="Keterangan..." rows="1" oninput="jobs[${idx}].ket = this.value; sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs));">${escapeHtml(job.ket)}</textarea>`; list.appendChild(row); }); }
+        
+        // ============================================================
+        //  PENGIRIMAN DATA PRIVATE VS BROADCAST
+        // ============================================================
+        function sendData() {
+            if (!conns.length) { showToast('⚠️ Hubungkan partner dulu!', 'error'); return; }
+            const hasContent = jobs.some(j => j.inv.trim() || j.ket.trim() || j.files.length > 0);
+            if (!hasContent) { showToast('⚠️ Data masih kosong!', 'error'); return; }
+            let totalSize = 0; jobs.forEach(j => { j.files.forEach(f => { const size = (f.data.length * 3) / 4; totalSize += size; }); });
+            if (totalSize > 5 * 1024 * 1024) { if (!confirm(`Total ukuran file ~${(totalSize/1024/1024).toFixed(1)} MB. Yakin kirim?`)) return; }
+            
+            const jobsClone = JSON.parse(JSON.stringify(jobs));
+            const isBroadcastMode = (activeChatId === 'broadcast');
+            
+            const payload = { 
+                type: 'data', 
+                jobs: jobsClone, 
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), 
+                sender: chat_myId, 
+                target: isBroadcastMode ? 'broadcast' : activeChatId,
+                isBroadcast: isBroadcastMode,
+                time: now(), 
+                timestamp: Date.now() 
+            };
+            
+            let sentCount = 0; 
+            
+            if (isBroadcastMode) {
+                // Broadcast ke seluruh partner yang terkoneksi
+                conns.forEach(c => { 
+                    if (c.open) { 
+                        try { c.send(payload); sentCount++; } catch (e) { console.error('Send error to', c.peer, e); } 
+                    } 
+                });
+            } else {
+                // Hanya kirim privat ke partner tertentu yang aktif
+                const targetConn = conns.find(c => c.peer === activeChatId && c.open);
+                if (targetConn) {
+                    try { targetConn.send(payload); sentCount++; } catch (e) { console.error('Private send error to', activeChatId, e); }
+                } else {
+                    showToast('❌ Partner tidak aktif!', 'error');
+                    return;
+                }
+            }
+            
+            if (sentCount === 0) { showToast('❌ Gagal mengirim. Koneksi belum siap.', 'error'); return; }
+            
+            // Tambahkan ke riwayat pesan pengirim
+            addMessageToHistory({ 
+                type: 'out', 
+                sender: chat_myId, 
+                target: isBroadcastMode ? 'broadcast' : activeChatId,
+                isBroadcast: isBroadcastMode,
+                jobs: jobsClone, 
+                time: payload.time, 
+                id: payload.id, 
+                timestamp: payload.timestamp, 
+                resent: false, 
+                forwarded: false 
+            });
+            
+            jobsClone.forEach(job => { if (job.files) { job.files.forEach(file => { if (file.type && file.type.startsWith('image/')) { sharedImages.push({ id: Date.now() + Math.random(), src: file.data, name: file.name, from: 'Anda', timestamp: Date.now() }); } }); } });
+            jobs = [{ files: [], inv: '', ket: '' }]; activeJobIdx = 0; renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); 
+            
+            // Konfirmasi & Notifikasi Terkirim
+            showToast('📤 Data terkirim!'); 
+            playTone('send');
+            showSystemNotification('Data Terkirim', `Terkirim ke ${isBroadcastMode ? sentCount + ' partner (Broadcast)' : activeChatId}`);
+            
+            updateChatImagesUI();
+            updatePeerList();
+        }
+
+        // ============================================================
+        //  MENANGGANI DATA MASUK (PRIVATE & BROADCAST)
+        // ============================================================
+        function handleData(data, from) { 
+            if (data && data.type === 'data' && data.jobs) { 
+                const sender = data.sender || from;
+                const isBcast = data.isBroadcast || data.target === 'broadcast';
+                const target = data.target || 'broadcast';
+
+                addMessageToHistory({ 
+                    type: 'in', 
+                    sender: sender, 
+                    target: target,
+                    isBroadcast: isBcast,
+                    jobs: data.jobs, 
+                    time: data.time || now(), 
+                    id: data.id || Date.now() + '-' + Math.random().toString(36).slice(2, 6), 
+                    timestamp: data.timestamp || Date.now(), 
+                    resent: data.resent || false, 
+                    forwarded: data.forwarded || false, 
+                    originalSender: data.originalSender || null 
+                }); 
+                
+                data.jobs.forEach(job => { if (job.files) { job.files.forEach(file => { if (file.type && file.type.startsWith('image/')) { sharedImages.push({ id: Date.now() + Math.random(), src: file.data, name: file.name, from: sender, timestamp: Date.now() }); } }); } }); 
+                updateChatImagesUI(); 
+                
+                // Memicu Notifikasi Suara & Sistem (Data Masuk)
+                playTone('receive');
+                showSystemNotification(`Pesan Masuk dari ${sender}`, isBcast ? `[Broadcast] Mengirim data baru.` : `[Privat] Mengirim data rahasia.`);
+
+                // Daftarkan sebagai Pesan Belum Terbaca (Unread) jika sedang tidak membuka chat tersebut
+                const effectiveChatId = isBcast ? 'broadcast' : sender;
+                if (document.getElementById('module-cetak').classList.contains('active') || activeChatId !== effectiveChatId) {
+                    unreadCounts[effectiveChatId] = (unreadCounts[effectiveChatId] || 0) + 1;
+                    updateUnreadBadges();
+                }
+                
+                updatePeerList();
+            } 
+        }
+
+        function addMessageToHistory(msg) { const entry = { ...msg, _uid: ++msgIdCounter }; messageHistory.push(entry); renderMessageHistory(); saveMessageHistory(); }
+        
+        // ============================================================
+        //  FILTER RIWAYAT CHAT YANG TAMPIL SESUAI CHATROOM AKTIF
+        // ============================================================
+        function renderMessageHistory() { 
+            const area = document.getElementById('stream-area'); 
+            const empty = document.getElementById('empty-state'); 
+            if (empty) empty.remove(); 
+            const children = area.children; 
+            for (let i = children.length - 1; i >= 0; i--) { if (children[i].id === 'empty-state') continue; area.removeChild(children[i]); } 
+            
+            // Filter Berdasarkan Chatroom Aktif
+            let filtered = messageHistory; 
+            if (activeChatId === 'broadcast') {
+                // Tampilkan pesan broadcast
+                filtered = messageHistory.filter(m => m.isBroadcast || !m.target || m.target === 'broadcast');
+            } else {
+                // Tampilkan pesan privat antara saya dan partner
+                filtered = messageHistory.filter(m => 
+                    !m.isBroadcast && (
+                        (m.sender === activeChatId && m.target === chat_myId) ||
+                        (m.sender === chat_myId && m.target === activeChatId)
+                    )
+                );
+            }
+
+            // Filter Berdasarkan Kolom Pencarian
+            if (searchQuery.trim()) { 
+                const q = searchQuery.trim().toLowerCase(); 
+                filtered = filtered.filter(msg => { 
+                    if (msg.sender && msg.sender.toLowerCase().includes(q)) return true; 
+                    if (msg.type === 'out' && 'Anda'.includes(q)) return true; 
+                    if (msg.jobs) { 
+                        for (const job of msg.jobs) { 
+                            if (job.inv && job.inv.toLowerCase().includes(q)) return true; 
+                            if (job.ket && job.ket.toLowerCase().includes(q)) return true; 
+                            if (job.files) { 
+                                for (const f of job.files) { if (f.name && f.name.toLowerCase().includes(q)) return true; } 
+                            } 
+                        } 
+                    } 
+                    return false; 
+                }); 
+            } 
+            
+            if (!filtered.length) { 
+                const el = document.createElement('div'); 
+                el.className = 'empty-state'; 
+                el.id = 'empty-state'; 
+                el.textContent = searchQuery.trim() ? '🔍 Tidak ada pesan yang cocok.' : '📭 Belum ada data obrolan di sini.'; 
+                area.appendChild(el); 
+                document.getElementById('msg-count').textContent = '0'; 
+                return; 
+            } 
+            
+            document.getElementById('msg-count').textContent = filtered.length; 
+            const sorted = [...filtered].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); 
+            sorted.forEach(msg => { 
+                const card = createMessageCard(msg); 
+                area.appendChild(card); 
+            }); 
+            area.scrollTop = area.scrollHeight; 
+        }
+
+        function createMessageCard(msg) {
+            const card = document.createElement('div'); card.className = `msg-card ${msg.type}`;
+            let bodyHtml = ''; if (msg.jobs && msg.jobs.length) { msg.jobs.forEach(job => { bodyHtml += `<div style="margin-bottom:4px;">`; if (job.inv) bodyHtml += `<div style="font-weight:700;color:var(--whatsapp-dark);margin-bottom:1px;">INV: ${escapeHtml(job.inv)}</div>`; if (job.ket) bodyHtml += `<div style="color:#333;font-size:0.75rem;margin-bottom:2px;">${escapeHtml(job.ket).replace(/\n/g,'<br>')}</div>`; if (job.files && job.files.length) { job.files.forEach(f => { const isPdf = f.isPdf || (f.name && f.name.toLowerCase().endsWith('.pdf')); if (f.type && f.type.startsWith('image/')) { bodyHtml += `<img src="${f.data}" style="max-width:100%;border-radius:6px;margin-top:4px;cursor:pointer;" onclick="downloadFile('${f.data}','${escapeHtml(f.name)}')">`; } else if (isPdf) { bodyHtml += `<div class="file-box" onclick="downloadFile('${f.data}','${escapeHtml(f.name)}')"><span class="pdf-icon">📄</span><div><div style="font-weight:600;font-size:0.7rem;">${escapeHtml(f.name)} <span class="pdf-badge">PDF</span></div><div style="font-size:0.55rem;color:var(--text-secondary);">Klik untuk unduh</div></div></div>`; } else { bodyHtml += `<div class="file-box" onclick="downloadFile('${f.data}','${escapeHtml(f.name)}')"><span style="font-size:1.1rem;">📄</span><div><div style="font-weight:600;font-size:0.7rem;">${escapeHtml(f.name)}</div><div style="font-size:0.55rem;color:var(--text-secondary);">Klik unduh</div></div></div>`; } }); } bodyHtml += `</div>`; }); }
+            let badges = ''; if (msg.resent) badges += `<span class="badge">↻ Ulang</span>`; if (msg.forwarded) badges += `<span class="badge">📤 Forward</span>`; if (msg.originalSender && msg.originalSender !== msg.sender) badges += `<span class="badge">dari ${msg.originalSender}</span>`;
+            const senderLabel = msg.type === 'out' ? 'Anda' : msg.sender;
+            card.innerHTML = `<div class="msg-header"><span class="sender">${senderLabel}</span><span style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${badges}<span>${msg.time}</span></span></div><div class="msg-body">${bodyHtml}</div><div class="msg-footer"><span>${msg.type === 'out' ? 'Terkirim' : 'Diterima'}</span><div class="actions"><button class="btn-mini primary" onclick="resendMessage(${msg._uid})">↻ Kirim Ulang</button><button class="btn-mini success" onclick="toggleForwardMenu(${msg._uid})">📤 Forward</button><div class="forward-dropdown" id="fwd-menu-${msg._uid}"><div class="menu" id="fwd-list-${msg._uid}"></div></div></div></div>`;
+            const menu = card.querySelector(`#fwd-list-${msg._uid}`); if (menu) { const peers = getConnectedPeers(); if (peers.length) { menu.innerHTML = peers.map(p => `<div class="menu-item" onclick="forwardMessage(${msg._uid},'${p}')">📤 ${p}</div>`).join(''); } else { menu.innerHTML = `<div class="menu-item" style="color:var(--text-secondary);">Tidak ada partner</div>`; } menu.classList.add('open'); }
+            return card;
+        }
+        function applySearchFilter() { const input = document.getElementById('chat-search-input'); const clearBtn = document.getElementById('clear-search-btn'); searchQuery = input.value; if (searchQuery.trim()) { clearBtn.classList.add('visible'); } else { clearBtn.classList.remove('visible'); } renderMessageHistory(); }
+        function clearSearch() { document.getElementById('chat-search-input').value = ''; document.getElementById('clear-search-btn').classList.remove('visible'); searchQuery = ''; renderMessageHistory(); }
+        function openHistoryModal() { document.getElementById('history-overlay').classList.add('open'); renderHistoryModal(); }
+        function closeHistoryModal() { document.getElementById('history-overlay').classList.remove('open'); }
+        function renderHistoryModal() { const body = document.getElementById('history-modal-body'); if (!messageHistory.length) { body.innerHTML = '<div class="history-empty">Belum ada pesan.</div>'; document.getElementById('history-total-msg').textContent = '0 pesan'; return; } const groups = {}; const sorted = [...messageHistory].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); sorted.forEach(msg => { const ts = msg.timestamp || Date.now(); const date = new Date(ts); const dateStr = date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }); if (!groups[dateStr]) { groups[dateStr] = { date: dateStr, dateObj: date, messages: [] }; } groups[dateStr].messages.push(msg); }); const sortedDates = Object.keys(groups).sort((a, b) => groups[a].dateObj.getTime() - groups[b].dateObj.getTime()); let html = ''; let totalMsg = 0; sortedDates.forEach(dateKey => { const group = groups[dateKey]; totalMsg += group.messages.length; html += `<div class="history-date-group" id="hist-group-${dateKey.replace(/\s/g,'_')}"><div class="history-date-header"><span class="date-label">📅 ${dateKey}</span><button class="btn-pdf-date" onclick="exportDateHistoryPDF('${dateKey}')">📄 PDF</button></div><div class="history-date-body">`; group.messages.forEach(msg => { const card = createMessageCard(msg); const clone = card.cloneNode(true); const actions = clone.querySelector('.actions'); if (actions) actions.remove(); const fwd = clone.querySelector('.forward-dropdown'); if (fwd) fwd.remove(); html += clone.outerHTML; }); html += `</div></div>`; }); body.innerHTML = html; document.getElementById('history-total-msg').textContent = totalMsg + ' pesan'; }
+        function exportDateHistoryPDF(dateKey) { const groupEl = document.getElementById('hist-group-' + dateKey.replace(/\s/g, '_')); if (!groupEl) return showToast('⚠️ Tidak ditemukan', 'error'); const clone = groupEl.cloneNode(true); const btn = clone.querySelector('.btn-pdf-date'); if (btn) btn.remove(); const wrapper = document.createElement('div'); wrapper.style.padding = '16px'; wrapper.style.fontFamily = 'Inter, sans-serif'; wrapper.style.background = 'white'; wrapper.style.maxWidth = '800px'; wrapper.style.margin = '0 auto'; wrapper.appendChild(clone); const style = document.createElement('style'); style.textContent = `.history-date-group{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:12px}.history-date-header{background:#075E54;color:#fff;padding:10px 16px;display:flex;justify-content:space-between}.history-date-body{padding:8px 12px;background:#ECE5DD}.msg-card{max-width:100%;border-radius:10px;padding:6px 12px;margin-bottom:4px;background:#fff}.msg-card.in{background:#fff}.msg-card.out{background:#DCF8C6}.msg-header{font-size:.65rem;color:#667781;display:flex;justify-content:space-between}.msg-header .sender{font-weight:600;color:#075E54}.msg-body{font-size:.8rem;line-height:1.4}.msg-footer{display:none}.badge{font-size:.5rem;background:rgba(0,0,0,.05);padding:1px 6px;border-radius:8px}.file-box{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.04);padding:4px 8px;border-radius:6px;margin-top:4px}.pdf-badge{background:#ef4444;color:#fff;border-radius:4px;padding:1px 8px;font-size:.5rem;font-weight:700;margin-left:4px}`; wrapper.appendChild(style); document.body.appendChild(wrapper); html2pdf().set({ margin: [8, 8, 8, 8], filename: `Riwayat_Chat_${dateKey.replace(/\s/g,'_')}.pdf`, image: { type: 'jpeg', quality: 0.85 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } }).from(wrapper).save().then(() => { wrapper.remove(); showToast('✅ PDF selesai: ' + dateKey); }).catch(err => { console.error(err); wrapper.remove(); showToast('❌ Gagal membuat PDF', 'error'); }); }
+        function exportAllHistoryPDF() { if (!messageHistory.length) return showToast('⚠️ Tidak ada pesan', 'error'); const wrapper = document.createElement('div'); wrapper.style.padding = '16px'; wrapper.style.fontFamily = 'Inter, sans-serif'; wrapper.style.background = 'white'; wrapper.style.maxWidth = '800px'; wrapper.style.margin = '0 auto'; const title = document.createElement('h2'); title.textContent = '📜 Riwayat Chat Lengkap'; title.style.color = '#075E54'; title.style.marginBottom = '16px'; wrapper.appendChild(title); const groups = {}; const sorted = [...messageHistory].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); sorted.forEach(msg => { const ts = msg.timestamp || Date.now(); const date = new Date(ts); const dateStr = date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }); if (!groups[dateStr]) { groups[dateStr] = { date: dateStr, dateObj: date, messages: [] }; } groups[dateStr].messages.push(msg); }); const sortedDates = Object.keys(groups).sort((a, b) => groups[a].dateObj.getTime() - groups[b].dateObj.getTime()); sortedDates.forEach(dateKey => { const group = groups[dateKey]; const div = document.createElement('div'); div.style.border = '1px solid #e5e7eb'; div.style.borderRadius = '12px'; div.style.overflow = 'hidden'; div.style.marginBottom = '12px'; const header = document.createElement('div'); header.style.background = '#075E54'; header.style.color = 'white'; header.style.padding = '10px 16px'; header.style.fontWeight = '700'; header.textContent = '📅 ' + dateKey; div.appendChild(header); const body = document.createElement('div'); body.style.padding = '8px 12px'; body.style.background = '#ECE5DD'; group.messages.forEach(msg => { const card = document.createElement('div'); card.className = `msg-card ${msg.type}`; card.style.maxWidth = '100%'; card.style.borderRadius = '10px'; card.style.padding = '6px 12px'; card.style.marginBottom = '4px'; card.style.background = msg.type === 'out' ? '#DCF8C6' : 'white'; let bodyHtml = ''; if (msg.jobs && msg.jobs.length) { msg.jobs.forEach(job => { bodyHtml += `<div style="margin-bottom:4px;">`; if (job.inv) bodyHtml += `<div style="font-weight:700;color:#075E54;margin-bottom:1px;">INV: ${escapeHtml(job.inv)}</div>`; if (job.ket) bodyHtml += `<div style="color:#333;font-size:0.75rem;margin-bottom:2px;">${escapeHtml(job.ket).replace(/\n/g,'<br>')}</div>`; if (job.files && job.files.length) { job.files.forEach(f => { const isPdf = f.isPdf || (f.name && f.name.toLowerCase().endsWith('.pdf')); if (f.type && f.type.startsWith('image/')) { bodyHtml += `<div style="margin-top:4px;">🖼️ ${escapeHtml(f.name)}</div>`; } else if (isPdf) { bodyHtml += `<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.04);padding:4px 8px;border-radius:6px;margin-top:4px;">📄 ${escapeHtml(f.name)} <span style="background:#ef4444;color:white;border-radius:4px;padding:1px 8px;font-size:0.5rem;font-weight:700;">PDF</span></div>`; } else { bodyHtml += `<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.04);padding:4px 8px;border-radius:6px;margin-top:4px;">📄 ${escapeHtml(f.name)}</div>`; } }); } bodyHtml += `</div>`; }); } const senderLabel = msg.type === 'out' ? 'Anda' : msg.sender; card.innerHTML = `<div style="font-size:0.65rem;color:#667781;display:flex;justify-content:space-between;"><span style="font-weight:600;color:#075E54;">${senderLabel}</span><span>${msg.time}</span></div><div style="font-size:0.8rem;line-height:1.4;">${bodyHtml}</div>`; body.appendChild(card); }); div.appendChild(body); wrapper.appendChild(div); }); const style = document.createElement('style'); style.textContent = `.msg-card{max-width:100%;border-radius:10px;padding:6px 12px;margin-bottom:4px}.msg-card.in{background:#fff}.msg-card.out{background:#DCF8C6}.msg-header{font-size:.65rem;color:#667781;display:flex;justify-content:space-between}.msg-header .sender{font-weight:600;color:#075E54}.msg-body{font-size:.8rem;line-height:1.4}.msg-footer{display:none}`; wrapper.appendChild(style); document.body.appendChild(wrapper); html2pdf().set({ margin: [8, 8, 8, 8], filename: 'Riwayat_Chat_Semua.pdf', image: { type: 'jpeg', quality: 0.85 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } }).from(wrapper).save().then(() => { wrapper.remove(); showToast('✅ PDF semua riwayat selesai.'); }).catch(err => { console.error(err); wrapper.remove(); showToast('❌ Gagal membuat PDF', 'error'); }); }
+        function resendMessage(uid) { const msg = messageHistory.find(m => m._uid === uid); if (!msg) return showToast('⚠️ Pesan tidak ditemukan', 'error'); if (!conns.length) return showToast('⚠️ Tidak ada partner terhubung', 'error'); const payload = { type: 'data', jobs: JSON.parse(JSON.stringify(msg.jobs)), id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), sender: chat_myId, time: now(), timestamp: Date.now(), resent: true, originalId: msg.id || msg._uid }; let sentCount = 0; conns.forEach(c => { if (c.open) { try { c.send(payload); sentCount++; } catch (e) { console.error(e); } } }); if (sentCount === 0) return showToast('❌ Gagal kirim ulang', 'error'); showToast('... Dikirim ulang ke ' + sentCount + ' partner'); const copy = { ...msg, type: 'out', sender: chat_myId, time: now(), timestamp: Date.now(), id: payload.id, resent: true, forwarded: false, _uid: ++msgIdCounter }; messageHistory.push(copy); renderMessageHistory(); saveMessageHistory(); }
+        function toggleForwardMenu(uid) { const menu = document.getElementById(`fwd-list-${uid}`); if (!menu) return; const isOpen = menu.classList.contains('open'); document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); if (!isOpen) { const peers = getConnectedPeers(); if (peers.length) { menu.innerHTML = peers.map(p => `<div class="menu-item" onclick="forwardMessage(${uid},'${p}')">📤 ${p}</div>`).join(''); } else { menu.innerHTML = `<div class="menu-item" style="color:var(--text-secondary);">Tidak ada partner</div>`; } menu.classList.add('open'); } setTimeout(() => { document.addEventListener('click', function closeFwd(e) { if (!e.target.closest('.forward-dropdown')) { document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); document.removeEventListener('click', closeFwd); } }); }, 10); }
+        function forwardMessage(uid, targetPeer) { const msg = messageHistory.find(m => m._uid === uid); if (!msg) return showToast('⚠️ Pesan tidak ditemukan', 'error'); const conn = conns.find(c => c.peer === targetPeer && c.open); if (!conn) return showToast('❌ Koneksi ke ' + targetPeer + ' tidak aktif', 'error'); const payload = { type: 'data', jobs: JSON.parse(JSON.stringify(msg.jobs)), id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), sender: chat_myId, time: now(), timestamp: Date.now(), forwarded: true, originalSender: msg.sender || msg.originalSender || chat_myId, originalId: msg.id || msg._uid }; try { conn.send(payload); showToast('📤 Diteruskan ke ' + targetPeer); const copy = { ...msg, type: 'out', sender: chat_myId, time: now(), timestamp: Date.now(), id: payload.id, resent: false, forwarded: true, originalSender: msg.sender || msg.originalSender || chat_myId, _uid: ++msgIdCounter }; messageHistory.push(copy); renderMessageHistory(); saveMessageHistory(); document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); } catch (e) { showToast('❌ Gagal meneruskan', 'error'); } }
+        function sendAllToCetak(mode) { if (sharedImages.length === 0) { showToast('Tidak ada gambar untuk dicetak.', 'error'); return; } if (mode === 'resi') { let addedCount = 0; sharedImages.forEach(img => { const dataResi = extractOrderId(img.name, img.name); const added = addResi(img.src, img.name || 'Gambar Chat', dataResi.orderId, false, dataResi.resi, dataResi.pengirim, dataResi.courier); if (added) addedCount++; }); switchModule('cetak'); openCetakTab('resi'); showToast('🖨️ ' + addedCount + ' gambar dikirim ke cetak resi.'); } else { const w = parseInt(document.getElementById('imgW').value) || 50; const h = parseInt(document.getElementById('imgH').value) || 50; sharedImages.forEach(img => { cetak_imageData.push({ id: Date.now() + Math.random(), src: img.src, w, h, gap: 0 }); }); switchModule('cetak'); openCetakTab('image'); showToast('🖼️ ' + sharedImages.length + ' gambar dikirim ke cetak gambar.'); } updateCetakUI(); }
+        function clearTimeline() { if (messageHistory.length === 0) return; if (!confirm('Hapus semua pesan?')) return; messageHistory = []; renderMessageHistory(); saveMessageHistory(); showToast('🗑️ Timeline dibersihkan'); }
+        function now() { return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+        function toBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); }
+        function downloadFile(data, name) { const a = document.createElement('a'); a.href = data; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+        function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.innerText = text; return div.innerHTML; }
+        function showToast(msg, type) { const t = document.createElement('div'); t.className = 'toast ' + (type === 'error' ? 'error' : ''); t.innerText = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3000); }
+
+        // ============================================================
+        // DETEKSI ORDER ID, RESI, PENGIRIM, KURIR
+        // ============================================================
+        function detectCourier(text, resi = '') {
+            const lower = (text || '').toLowerCase();
+            const resiUpper = (resi || '').toUpperCase().trim();
+            if (/^SPXID\d{9,15}$/i.test(resiUpper)) return 'SHOPEE EXPRESS';
+            if (/^(JY|JP|JX)\d{8,15}$/i.test(resiUpper)) return 'J&T EXPRESS';
+            if (/^(ID|NLID)\d{10,15}$/i.test(resiUpper)) return 'ANTERAJA';
+            if (/^11\d{10,15}$/.test(resiUpper)) return 'ANTERAJA';
+            if (/^[A-Z]{2}\d{9,12}$/i.test(resiUpper)) return 'JNE';
+            if (/^\d{15,20}$/.test(resiUpper)) return 'SICEPAT';
+            if (/^[A-Z]{2,4}\d{8,12}$/i.test(resiUpper)) return 'NINJA VAN';
+            if (lower.includes('sameday') || lower.includes('instant') || lower.includes('shopee instant')) return 'SHOPEE INSTANT';
+            if (lower.includes('shopee express') || lower.includes('spx') || lower.includes('shopee')) return 'SHOPEE EXPRESS';
+            if (lower.includes('j&t') || lower.includes('jnt') || lower.includes('jet') || lower.includes('j and t') || lower.includes('j&t express')) return 'J&T EXPRESS';
+            if (lower.includes('anteraja') || lower.includes('antera') || lower.includes('pak eko') || lower.includes('pakeko')) return 'ANTERAJA';
+            if (lower.includes('jne')) return 'JNE';
+            if (lower.includes('sicepat') || lower.includes('si cepat')) return 'SICEPAT';
+            if (lower.includes('ninja') || lower.includes('ninja van')) return 'NINJA VAN';
+            if (lower.includes('lion') || lower.includes('lion parcel')) return 'LION PARCEL';
+            if (lower.includes('pos') || lower.includes('pos indonesia')) return 'POS INDONESIA';
+            if (lower.includes('tiki')) return 'TIKI';
+            if (lower.includes('wahana')) return 'WAHANA';
+            if (lower.includes('id express') || lower.includes('idexpress')) return 'ID EXPRESS';
+            return 'Tidak Terdeteksi';
+        }
+
+        function extractOrderId(text, fileName = '') {
+            const result = { resi: '-', orderId: '-', pengirim: '-', courier: '-' };
+            if (!text) return result;
+            const cleanText = text.replace(/\t/g, ' ').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+            const lowerText = cleanText.toLowerCase();
+            // Resi
+            const resiPatterns = [
+                /\bSPXID\d{9,15}\b/i, /\b(JY|JP|JX)\d{8,15}\b/i, /\b(ID|NLID)\d{10,15}\b/i,
+                /\b11\d{10,15}\b/, /\b[A-Z]{2}\d{9,12}\b/i, /\b\d{15,20}\b/, /\b\d{12,16}\b/
+            ];
+            for (const pattern of resiPatterns) {
+                const match = cleanText.match(pattern);
+                if (match) { result.resi = match[0].toUpperCase(); break; }
+            }
+            // Order ID
+            const orderPatterns = [ /\b\d{6}[A-Z0-9]{8,12}\b/i, /\b5\d{17,19}\b/, /INV\/\d{8}\/[A-Z0-9]+\/\d+/i, /\b\d{10,14}\b/ ];
+            for (const pattern of orderPatterns) {
+                const match = cleanText.match(pattern);
+                if (match) { result.orderId = match[0].toUpperCase(); break; }
+            }
+            if (result.orderId === '-' && fileName) {
+                const fileMatch = fileName.match(/\d{10,20}/);
+                if (fileMatch) result.orderId = fileMatch[0];
+            }
+            // Pengirim
+            let pengirim = '-';
+            if (lowerText.includes('safah.id') || lowerText.includes('safah')) {
+                pengirim = 'SAFAH.ID';
+            } else if (lowerText.includes('kertases')) {
+                pengirim = 'KERTASES';
+            } else {
+                const senderPatterns = [
+                    /([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])\s+Pengirim\s*[:：]/i,
+                    /Pengirim\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /Pengirim\s+[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /Pengirim\s*[:：]([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /Penjual\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /Seller\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /Store\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /From\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i
+                ];
+                for (const pattern of senderPatterns) {
+                    const match = cleanText.match(pattern);
+                    if (match && match[1]) {
+                        const rawName = match[1].trim().replace(/\s+/g, ' ').trim();
+                        if (rawName.length >= 2) { pengirim = rawName.toUpperCase(); break; }
+                    }
+                }
+                if (pengirim === '-' && fileName) {
+                    const lowerFile = fileName.toLowerCase();
+                    if (lowerFile.includes('safah')) pengirim = 'SAFAH.ID';
+                    else if (lowerFile.includes('kertases')) pengirim = 'KERTASES';
+                }
+            }
+            result.pengirim = pengirim;
+            result.courier = detectCourier(cleanText, result.resi);
+            return result;
+        }
+
+        // ============================================================
+        //  PADDLEOCR INTEGRATION
+        // ============================================================
+        let paddleOCRServerActive = false;
+        let OCR_SERVER_URL = localStorage.getItem('ocr_server_url') || 'http://localhost:8000/ocr';
+
+        function changeOcrUrl() {
+            const currentUrl = localStorage.getItem('ocr_server_url') || 'http://localhost:8000/ocr';
+            const newUrl = prompt("Masukkan URL/IP Server OCR baru:", currentUrl);
+            if (newUrl !== null && newUrl.trim() !== "") {
+                localStorage.setItem('ocr_server_url', newUrl.trim());
+                OCR_SERVER_URL = newUrl.trim();
+                showToast("✅ URL Server OCR diperbarui!");
+                checkPaddleOCRServer();
+            }
+        }
+
+        async function checkPaddleOCRServer() {
+            const statusEl = document.getElementById('ocrServerStatus');
+            statusEl.textContent = '⏳ Mengecek...';
+            statusEl.className = 'status checking';
+            try {
+                const response = await fetch(OCR_SERVER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                if (response.ok) {
+                    paddleOCRServerActive = true;
+                    statusEl.textContent = '✅ Terhubung';
+                    statusEl.className = 'status connected';
+                    showToast('✅ Server PaddleOCR aktif!');
+                } else {
+                    paddleOCRServerActive = false;
+                    statusEl.textContent = '❌ Tidak aktif';
+                    statusEl.className = 'status disconnected';
+                    showToast('⚠️ Server PaddleOCR tidak aktif.', 'error');
+                }
+            } catch (e) {
+                paddleOCRServerActive = false;
+                statusEl.textContent = '❌ Tidak aktif';
+                statusEl.className = 'status disconnected';
+                showToast('⚠️ Koneksi ke server PaddleOCR gagal.', 'error');
+            }
+        }
+
+        async function callPaddleOCR(imageSrc) {
+            if (!paddleOCRServerActive || !document.getElementById('usePaddleOCR').checked) {
+                return null;
+            }
+            try {
+                const blob = await fetch(imageSrc).then(r => r.blob());
+                const formData = new FormData();
+                formData.append('file', blob, 'image.jpg');
+                const response = await fetch(OCR_SERVER_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) throw new Error('Server error: ' + response.status);
+                const data = await response.json();
+                return data.full_text || null;
+            } catch (err) {
+                console.warn('PaddleOCR call failed:', err);
+                return null;
+            }
+        }
+
+        // ============================================================
+        //  MODUL CETAK (dengan PaddleOCR integration)
+        // ============================================================
+        let cetak_currentMode = 'resi';
+        let cetak_resiData = [];
+        let cetak_imageData = [];
+        let cetak_assetList = [];
+        let cetak_uploadedImages = [];
+        let cetak_uploadedHistory = [];
+        const PAPER_SIZES = { 'A4': [210, 297], 'A3': [297, 420], 'A3+': [329, 483] };
+        const imageFilenames = ['AESTETiC.jpg','ASTRONOT.jpg','AVATAR.jpg','BE-POSITIVE.jpg','BEACH.jpg','BT21.jpg','COFFEE.jpg','DORAEMON.jpg','FARM.jpg','FLOWER-NATURE.jpg','GAME.jpg','IDEAS=COFFEE.jpg','INDONESIA.jpg','ITSOK.jpg','KUCING LUTCU.jpg','LOVE.jpg','MEOW.jpg','MOOD-PANDA.jpg','MOTOR.jpg','NOTHINK.jpg','OCEANS.jpg','ONE-PICE.jpg','PANTAI.jpg','SAMURAI.jpg','SUCCES.jpg','SWEAT-CAT.jpg','TRAVELING.jpg','UNICORN.jpg','VW.jpg','H013.jpg','H014.jpg','H015.jpg','H016.jpg','H017.jpg','H021.jpg','H022.jpg','H023.jpg','H018.jpg','H019.jpg','H020.jpg'];
+
+        function loadUploadHistory() {
+            const stored = localStorage.getItem('tfl_uploadHistory');
+            if (stored) {
+                try { cetak_uploadedHistory = JSON.parse(stored); } catch (e) { cetak_uploadedHistory = []; }
+            } else { cetak_uploadedHistory = []; }
+            renderUploadHistory();
+        }
+        function saveUploadHistory() {
+            try { localStorage.setItem('tfl_uploadHistory', JSON.stringify(cetak_uploadedHistory)); } catch (e) {}
+        }
+
+        function switchModule(mod) {
+            document.querySelectorAll('#app-nav .tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + mod).classList.add('active');
+            document.getElementById('module-chat').classList.remove('active');
+            document.getElementById('module-cetak').classList.remove('active');
+            document.getElementById('module-' + mod).classList.add('active');
+            if (mod === 'cetak') { updateCetakUI(); renderPrintHistory(); updateChatImagesUI(); loadUploadHistory(); }
+            
+            // Atur pembersihan unread badge jika kembali ke chat tab
+            if (mod === 'chat') {
+                unreadCounts[activeChatId] = 0;
+                updateUnreadBadges();
+            }
+        }
+
+        function openCetakTab(mode) {
+            cetak_currentMode = mode;
+            document.querySelectorAll('.cetak-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.cetak-tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.canvas-container').forEach(v => v.classList.remove('active'));
+            const targetBtn = document.querySelector(`.cetak-tab-btn[onclick*="${mode}"]`);
+            if (targetBtn) targetBtn.classList.add('active');
+            document.getElementById('cetak-tab-' + mode).classList.add('active');
+            document.getElementById('canvas-' + (mode === 'resi' ? 'resi' : 'image')).classList.add('active');
+            document.getElementById('cetak-title').innerText = mode === 'resi' ? 'STUDIO CETAK RESI' : (mode === 'image' ? 'STUDIO CETAK IMAGE' : 'HISTORI CETAK RESI');
+            if (mode === 'history') renderPrintHistory();
+            updateCetakUI();
+        }
+
+        function updateCetakUI() {
+            if (cetak_currentMode === 'resi' || cetak_currentMode === 'history') renderResi();
+            if (cetak_currentMode === 'image') renderImgMode();
+            updateBadge();
+            updateChatImagesUI();
+            renderUploadHistory();
+        }
+
+        function updateBadge() {
+            document.getElementById('resiBadge').innerText = cetak_resiData.length;
+            const history = JSON.parse(localStorage.getItem('resi_print_history') || '[]');
+            const historyBadge = document.getElementById('historyBadge');
+            if (historyBadge) { let totalResiAllTime = 0; history.forEach(item => { totalResiAllTime += (item.totalResi || 0); }); historyBadge.innerText = totalResiAllTime; }
+        }
+
+        function getPaperDim() {
+            const val = document.getElementById('paperType').value;
+            if (val === 'custom') return [parseInt(document.getElementById('custW').value), parseInt(document.getElementById('custH').value)];
+            return PAPER_SIZES[val] || [210, 297];
+        }
+
+        function renderResi() {
+            const container = document.getElementById('canvas-resi');
+            container.innerHTML = '';
+            const [pW, pH] = getPaperDim();
+            const rW = parseInt(document.getElementById('resiWidthNum').value);
+            const rH = parseInt(document.getElementById('resiHeightNum').value);
+            const pW_safe = pW - 10, pH_safe = pH - 10;
+            const cols = Math.floor(pW_safe / rW) || 1;
+            const rows = Math.floor(pH_safe / rH) || 1;
+            const perPage = cols * rows;
+            const totalPages = Math.ceil(cetak_resiData.length / perPage) || 0;
+            document.getElementById('resiCapacity').innerText = perPage;
+            document.getElementById('resiTotal').innerText = cetak_resiData.length;
+            for (let i = 0; i < totalPages; i++) {
+                const page = createPageEl(pW, pH, i + 1);
+                page.style.display = 'flex';
+                page.style.flexWrap = 'wrap';
+                page.style.alignContent = 'flex-start';
+                page.style.justifyContent = 'flex-start';
+                page.style.alignItems = 'flex-start';
+                page.style.padding = '5mm';
+                page.style.gap = '0';
+                cetak_resiData.slice(i * perPage, (i + 1) * perPage).forEach(item => {
+                    const slot = document.createElement('div');
+                    slot.className = 'slot';
+                    slot.style.width = rW + 'mm';
+                    slot.style.height = rH + 'mm';
+                    slot.style.flexShrink = '0';
+                    slot.innerHTML = `<img src="${item.src}"><button class="delete-btn" onclick="deleteCetakItem(${item.id})">×</button>`;
+                    page.appendChild(slot);
+                });
+                container.appendChild(page);
+            }
+            document.getElementById('pageCounter').innerText = `Item: ${cetak_resiData.length} | Hal: ${totalPages}`;
+        }
+
+        function renderImgMode() {
+            const container = document.getElementById('canvas-image');
+            container.innerHTML = '';
+            const [pW, pH] = getPaperDim();
+            if (cetak_imageData.length === 0) { document.getElementById('pageCounter').innerText = "Item: 0 | Hal: 0"; return; }
+            const cropLen = parseFloat(document.getElementById('cropLenNum').value) || 5;
+            const cropThick = parseFloat(document.getElementById('cropThickNum').value) || 0.2;
+            const cropOffset = parseFloat(document.getElementById('cropOffsetNum').value) || 0;
+            const showCrop = document.getElementById('showCrop').checked;
+            const gapVal = parseFloat(document.getElementById('imgGap').value) || 0;
+            let pCount = 1;
+            let currentPage = createPageEl(pW, pH, pCount);
+            currentPage.style.position = 'relative';
+            currentPage.style.padding = '0';
+            container.appendChild(currentPage);
+            let curX = 0, curY = 0, rowH = 0, sX = 0, sY = 0, sRowH = 0;
+            cetak_imageData.forEach(item => {
+                if (curX + item.w > pW) { curX = 0; curY += rowH; rowH = 0; }
+                if (curY + item.h > pH) { pCount++; currentPage = createPageEl(pW, pH, pCount); currentPage.style.position = 'relative'; currentPage.style.padding = '0'; container.appendChild(currentPage); curX = 0; curY = 0; rowH = 0; sX = 0; sY = 0; sRowH = 0; }
+                if (sX + item.w > pW && sX > 0) { sX = 0; sY += sRowH + gapVal; sRowH = 0; }
+                const slot = document.createElement('div');
+                slot.className = 'slot img-mode';
+                if (!showCrop) slot.classList.add('no-crop');
+                slot.style.setProperty('--crop-len', cropLen + 'mm');
+                slot.style.setProperty('--crop-thick', cropThick + 'mm');
+                slot.style.setProperty('--crop-offset', cropOffset + 'mm');
+                slot.style.setProperty('--x-screen', sX + 'mm');
+                slot.style.setProperty('--y-screen', sY + 'mm');
+                slot.style.setProperty('--x-print', curX + 'mm');
+                slot.style.setProperty('--y-print', curY + 'mm');
+                slot.style.setProperty('--slot-width', item.w + 'mm');
+                slot.style.setProperty('--slot-height', item.h + 'mm');
+                slot.style.width = item.w + 'mm';
+                slot.style.height = item.h + 'mm';
+                slot.innerHTML = `<img src="${item.src}"><div class="crop-mark tl"></div><div class="crop-mark tr"></div><div class="crop-mark bl"></div><div class="crop-mark br"></div><button class="delete-btn" onclick="deleteCetakItem(${item.id})">×</button>`;
+                currentPage.appendChild(slot);
+                curX += item.w; if (item.h > rowH) rowH = item.h;
+                sX += item.w + gapVal; if (item.h > sRowH) sRowH = item.h;
+            });
+            document.getElementById('pageCounter').innerText = `Item: ${cetak_imageData.length} | Hal: ${pCount}`;
+        }
+
+        function createPageEl(w, h, n) { const div = document.createElement('div'); div.className = 'paper-page'; div.style.width = w + 'mm'; div.style.height = h + 'mm'; div.innerHTML = `<div class="page-label no-print">Hal ${n}</div>`; return div; }
+
+        function deleteCetakItem(id) {
+            if (cetak_currentMode === 'resi' || cetak_currentMode === 'history') { cetak_resiData = cetak_resiData.filter(i => i.id !== id); } else { cetak_imageData = cetak_imageData.filter(item => item.id !== id); }
+            updateCetakUI();
+        }
+
+        function clearCanvas() { if (!confirm("Hapus semua?")) return; if (cetak_currentMode === 'resi' || cetak_currentMode === 'history') cetak_resiData = []; else cetak_imageData = []; updateCetakUI(); }
+
+        // --- addResi dengan PaddleOCR ---
+        async function addResi(src, name = 'Resi', orderId = '-', isDirectClickFromHistory = false, resi = '-', pengirim = '-', courier = '-') {
+            // Coba PaddleOCR
+            let ocrText = null;
+            if (document.getElementById('usePaddleOCR').checked) {
+                ocrText = await callPaddleOCR(src);
+            }
+            if (ocrText) {
+                const extracted = extractOrderId(ocrText, name);
+                resi = extracted.resi || resi;
+                orderId = extracted.orderId || orderId;
+                pengirim = extracted.pengirim || pengirim;
+                courier = extracted.courier || courier;
+            }
+
+            // Duplikat check
+            const inCanvas = cetak_resiData.some(item => {
+                if (orderId && item.orderId && item.orderId === orderId && item.orderId !== '-') return true;
+                return item.src === src;
+            });
+            const inHistory = !isDirectClickFromHistory && cetak_uploadedHistory.some(item => {
+                if (orderId && item.orderId && item.orderId === orderId && item.orderId !== '-') return true;
+                return item.src === src;
+            });
+            if (inCanvas || inHistory) {
+                let locationLabel = "";
+                if (inCanvas && inHistory) locationLabel = "di canvas DAN di hasil upload lama";
+                else if (inCanvas) locationLabel = "di canvas";
+                else locationLabel = "di hasil upload lama";
+                const label = (orderId && orderId !== '-') ? `dengan No. Pesanan "${orderId}"` : `"${name}"`;
+                const proceed = confirm(`⚠️ Resi ${label} sudah terdeteksi ada ${locationLabel}!\n\nApakah Anda ingin tetap memprosesnya?\n\n- Klik [OK] / [Lanjutkan] untuk tetap memasukkan\n- Klik [Batal] / [Cancel] untuk membatalkan`);
+                if (!proceed) return false;
+            }
+
+            const timestamp = new Date().toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            cetak_resiData.push({ id: Date.now() + Math.random(), src, name, orderId: orderId || '-', resi: resi || '-', pengirim: pengirim || '-', courier: courier || '-', timestamp });
+            updateCetakUI();
+            return true;
+        }
+
+        // ===== PDF Upload =====
+        const trimCanvas = (canvas) => {
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const w = canvas.width, h = canvas.height;
+            const pixels = ctx.getImageData(0, 0, w, h);
+            const data = pixels.data;
+            let minX = w, minY = h, maxX = 0, maxY = 0, found = false;
+            for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (data[i + 3] > 0 && (data[i] < 253 || data[i + 1] < 253 || data[i + 2] < 253)) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; found = true; } } }
+            if (!found) return canvas;
+            const p = 1; const trimW = (maxX - minX) + (p * 2); const trimH = (maxY - minY) + (p * 2);
+            const trimmed = document.createElement('canvas'); trimmed.width = trimW; trimmed.height = trimH;
+            trimmed.getContext('2d').drawImage(canvas, minX - p, minY - p, trimW, trimH, 0, 0, trimW, trimH);
+            return trimmed;
+        };
+
+        document.getElementById('pdfInp').onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            for (let f of files) {
+                const pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    let dataResi = { resi: '-', orderId: '-', pengirim: '-', courier: '-' };
+                    try { const textContent = await page.getTextContent(); const textStr = textContent.items.map(item => item.str).join(' '); dataResi = extractOrderId(textStr, f.name); } catch (err) { console.error("Text extraction failed:", err); }
+                    const viewport = page.getViewport({ scale: 2.5 });
+                    const canvas = document.createElement('canvas'); canvas.width = viewport.width; canvas.height = viewport.height;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    const trimmedCanvas = trimCanvas(canvas);
+                    const src = trimmedCanvas.toDataURL('image/jpeg', 0.9);
+                    const pageName = f.name + ' P' + i;
+                    const added = await addResi(src, pageName, dataResi.orderId, false, dataResi.resi, dataResi.pengirim, dataResi.courier);
+                    if (added) addToHistory(pageName, src, dataResi.orderId, dataResi.resi, dataResi.pengirim, dataResi.courier);
+                }
+            }
+            updateCetakUI();
+        };
+
+        function addToHistory(name, src, orderId = '-', resi = '-', pengirim = '-', courier = '-') {
+            const alreadyInRegistry = cetak_uploadedHistory.some(item => {
+                if (orderId && item.orderId && item.orderId === orderId && item.orderId !== '-') return true;
+                return item.src === src;
+            });
+            if (!alreadyInRegistry) {
+                cetak_uploadedHistory.push({ name, src, orderId, resi, pengirim, courier });
+                saveUploadHistory();
+            }
+            renderUploadHistory();
+        }
+
+        function renderUploadHistory() {
+            const container = document.getElementById('resiHistory');
+            container.innerHTML = '';
+            if (cetak_uploadedHistory.length === 0) { container.innerHTML = '<div style="grid-column:span 2; text-align:center; color:var(--text-secondary); font-size:9px; padding:8px 0;">Belum ada upload.</div>'; return; }
+            cetak_uploadedHistory.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `<img src="${item.src}" onclick="addResiFromHistory(${idx})"><div>${item.name}${ (item.orderId && item.orderId !== '-') ? '<br><span style="color:#075E54;font-weight:bold;font-size:7px;">' + item.orderId + '</span>' : ''}</div><button class="del-btn" onclick="deleteUploadedHistoryItem(${idx}, event)">×</button>`;
+                container.appendChild(div);
+            });
+        }
+
+        function addResiFromHistory(idx) {
+            const item = cetak_uploadedHistory[idx];
+            if (!item) return;
+            addResi(item.src, item.name, item.orderId, true, item.resi, item.pengirim, item.courier);
+        }
+
+        function deleteUploadedHistoryItem(idx, event) {
+            event.stopPropagation();
+            if (!confirm(`Hapus "${cetak_uploadedHistory[idx].name}" dari riwayat upload?`)) return;
+            cetak_uploadedHistory.splice(idx, 1);
+            saveUploadHistory();
+            renderUploadHistory();
+        }
+
+        function clearUploadedHistory() {
+            if (cetak_uploadedHistory.length === 0) return;
+            if (!confirm('Hapus SEMUA riwayat upload? (tidak mempengaruhi canvas)')) return;
+            cetak_uploadedHistory = [];
+            saveUploadHistory();
+            renderUploadHistory();
+            showToast('🗑 Semua riwayat upload dihapus.');
+        }
+
+        // ===== Image Upload =====
+        const uploadArea = document.getElementById('uploadArea');
+        const imgUpload = document.getElementById('imgUpload');
+        if (uploadArea) {
+            uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+            uploadArea.addEventListener('dragleave', () => { uploadArea.classList.remove('dragover'); });
+            uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')); handleImageUpload(files); });
+        }
+        if (imgUpload) { imgUpload.addEventListener('change', (e) => { const files = Array.from(e.target.files); handleImageUpload(files); imgUpload.value = ''; }); }
+
+        function handleImageUpload(files) {
+            if (files.length === 0) return;
+            const maxSize = 10 * 1024 * 1024;
+            files.forEach(file => {
+                if (file.size > maxSize) { alert(`⚠️ "${file.name}" terlalu besar (max 10MB)`); return; }
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const dataUrl = e.target.result;
+                    const uploadedImg = { id: Date.now() + Math.random(), name: file.name, dataUrl };
+                    cetak_uploadedImages.push(uploadedImg);
+                    renderUploadedImages();
+                    // Tambahkan ke canvas dengan PaddleOCR
+                    const added = await addResi(dataUrl, file.name);
+                    if (!added) {
+                        // fallback: tambahkan ke imageData
+                        cetak_imageData.push({ id: uploadedImg.id, src: dataUrl, w: parseInt(document.getElementById('imgW').value), h: parseInt(document.getElementById('imgH').value), gap: 0 });
+                    }
+                    updateCetakUI();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderUploadedImages() {
+            const container = document.getElementById('uploadPreview');
+            container.innerHTML = '';
+            cetak_uploadedImages.forEach((img, idx) => {
+                const div = document.createElement('div');
+                div.className = 'upload-preview-item';
+                div.innerHTML = `<button class="remove-btn" onclick="removeUploadedImage(${idx}, event)">×</button><img src="${img.dataUrl}" onclick="addUploadedToCanvas(${idx})"><div class="name">${img.name}</div>`;
+                container.appendChild(div);
+            });
+        }
+
+        function removeUploadedImage(idx, event) {
+            event.stopPropagation();
+            const removedId = cetak_uploadedImages[idx].id;
+            cetak_uploadedImages.splice(idx, 1);
+            cetak_imageData = cetak_imageData.filter(item => item.id !== removedId);
+            cetak_resiData = cetak_resiData.filter(item => item.id !== removedId);
+            renderUploadedImages();
+            updateCetakUI();
+        }
+
+        function addUploadedToCanvas(idx) {
+            const img = cetak_uploadedImages[idx];
+            addResi(img.dataUrl, img.name);
+        }
+
+        // ===== Asset Grid =====
+        function loadAssets() {
+            const grid = document.getElementById('assetGrid');
+            grid.innerHTML = '<div style="grid-column:span 2; text-align:center; color:var(--text-secondary); font-size:11px;">Memuat gambar...</div>';
+            cetak_assetList = imageFilenames.map(name => ({ id: Math.random(), name, dataUrl: 'images/' + name }));
+            renderAssets();
+        }
+        function renderAssets() {
+            const grid = document.getElementById('assetGrid');
+            grid.innerHTML = '';
+            if (cetak_assetList.length === 0) { grid.innerHTML = '<div style="grid-column:span 2; text-align:center; color:var(--text-secondary); font-size:11px;">Tidak ada gambar. Tekan MUAT.</div>'; return; }
+            cetak_assetList.forEach((asset, idx) => {
+                const div = document.createElement('div');
+                div.className = 'asset-item';
+                div.innerHTML = `<img src="${asset.dataUrl}" loading="lazy" onclick="addAssetToCanvas(${idx})" onerror="this.style.display='none'"><div class="name">${asset.name}</div><button class="rotate-btn" onclick="rotateAsset(${idx})">↻</button>`;
+                grid.appendChild(div);
+            });
+        }
+        function rotateAsset(idx) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.height; canvas.height = img.width;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(90 * Math.PI / 180);
+                ctx.drawImage(img, -img.width / 2, -img.height / 2);
+                cetak_assetList[idx].dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                renderAssets();
+            };
+            img.onerror = function() { console.error("Gagal memuat gambar untuk rotasi."); showToast("❌ Gagal memuat gambar untuk rotasi.", "error"); };
+            img.src = cetak_assetList[idx].dataUrl;
+        }
+        function addAssetToCanvas(idx) {
+            if (!cetak_assetList[idx]) return;
+            addResi(cetak_assetList[idx].dataUrl, cetak_assetList[idx].name);
+        }
+
+        // ===== Chat Images UI =====
+        function updateChatImagesUI() {
+            const container = document.getElementById('chatImagesContainer');
+            const countEl = document.getElementById('chatImageCount');
+            if (!container) return;
+            if (sharedImages.length === 0) { container.innerHTML = '<div style="color:var(--text-secondary); font-size:10px; padding:8px 0;">Belum ada gambar dari chat.</div>'; if (countEl) countEl.innerText = '0'; return; }
+            if (countEl) countEl.innerText = sharedImages.length;
+            container.innerHTML = sharedImages.map((img, idx) => `<div class="chat-image-item" title="${img.name} (dari ${img.from})"><img src="${img.src}" onclick="addChatImageToCanvas(${idx})"><button class="add-btn" onclick="addChatImageToCanvas(${idx})">+</button></div>`).join('');
+        }
+        function addChatImageToCanvas(idx) {
+            const img = sharedImages[idx];
+            if (!img) return;
+            addResi(img.src, img.name);
+        }
+
+        // ===== HELPER HISTORI =====
+        function formatDateID(timestamp) { const d = new Date(timestamp); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+
+        // ============================================================
+        //  FIX CETAK GANDA & SAVE HISTORY
+        // ============================================================
+        let isPrinting = false, printTimeout = null, printLockTimer = null;
+        function triggerPrint() {
+            if (isPrinting) { showToast('⏳ Proses cetak sedang berjalan...', 'error'); return; }
+            if (printTimeout || printLockTimer) return;
+            isPrinting = true;
+            const printBtn = document.getElementById('printBtn');
+            if (printBtn) printBtn.disabled = true;
+            if (document.getElementById('module-cetak').classList.contains('active')) {
+                if (cetak_currentMode === 'resi' && cetak_resiData.length > 0) { saveResiPrintHistory(); }
+            }
+            printTimeout = setTimeout(() => { printTimeout = null; }, 800);
+            window.print();
+            const resetPrint = () => {
+                isPrinting = false; if (printBtn) printBtn.disabled = false;
+                if (printTimeout) { clearTimeout(printTimeout); printTimeout = null; }
+                if (printLockTimer) { clearTimeout(printLockTimer); printLockTimer = null; }
+                window.removeEventListener('afterprint', resetPrint);
+            };
+            window.addEventListener('afterprint', resetPrint);
+            printLockTimer = setTimeout(() => {
+                if (isPrinting) { isPrinting = false; if (printBtn) printBtn.disabled = false; if (printTimeout) { clearTimeout(printTimeout); printTimeout = null; } window.removeEventListener('afterprint', resetPrint); printLockTimer = null; }
+            }, 5000);
+            window.addEventListener('beforeprint', () => { isPrinting = true; if (printBtn) printBtn.disabled = true; }, { once: true });
+        }
+
+        let _printSaving = false, _lastPrintHash = '', _lastPrintTime = 0;
+        function saveResiPrintHistory() {
+            if (_printSaving) return;
+            _printSaving = true;
+            const totalResi = cetak_resiData.length;
+            if (totalResi === 0) { _printSaving = false; return; }
+            const [pW, pH] = getPaperDim();
+            const rW = parseInt(document.getElementById('resiWidthNum').value);
+            const rH = parseInt(document.getElementById('resiHeightNum').value);
+            const cols = Math.floor(pW / rW) || 1, rows = Math.floor(pH / rH) || 1;
+            const perPage = cols * rows, totalPages = Math.ceil(totalResi / perPage) || 0;
+            const paperType = document.getElementById('paperType').value;
+            const paperLabel = paperType === 'custom' ? `Karso (${pW}x${pH}mm)` : `${paperType} (${pW}x${pH}mm)`;
+            const hash = `${totalResi}_${perPage}_${pW}_${pH}_${rW}_${rH}`;
+            const now = Date.now();
+            if (hash === _lastPrintHash && (now - _lastPrintTime) < 5000) { _printSaving = false; return; }
+            const itemsDetail = cetak_resiData.map((item, idx) => ({ name: item.name || 'Resi Tanpa Nama', orderId: item.orderId || '-', resi: item.resi || '-', pengirim: item.pengirim || '-', courier: item.courier || '-', page: Math.floor(idx / perPage) + 1 }));
+            const entry = { id: now, timestamp: new Date().toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalResi, perPage, totalPages, paperLabel, resiDim: `${rW}x${rH}mm`, items: itemsDetail };
+            let history = JSON.parse(localStorage.getItem('resi_print_history') || '[]');
+            if (history.length > 0 && history[0].totalResi === totalResi && (now - history[0].id) < 3000) { _printSaving = false; return; }
+            history.unshift(entry);
+            localStorage.setItem('resi_print_history', JSON.stringify(history));
+            renderPrintHistory();
+            _lastPrintHash = hash; _lastPrintTime = now;
+            setTimeout(() => { _printSaving = false; }, 1000);
+        }
+
+        // ===== FILTER & AMBIL DATA HISTORI CETAK =====
+        function getHistoryData() {
+            const history = JSON.parse(localStorage.getItem('resi_print_history') || '[]');
+            if (!historySearchQuery) return history;
+            const filtered = [];
+            history.forEach(session => {
+                const matchingItems = (session.items || []).filter(item => {
+                    return (item.resi || '').toLowerCase().includes(historySearchQuery) ||
+                           (item.orderId || '').toLowerCase().includes(historySearchQuery) ||
+                           (item.pengirim || '').toLowerCase().includes(historySearchQuery) ||
+                           (item.courier || '').toLowerCase().includes(historySearchQuery);
+                });
+                if (matchingItems.length > 0) {
+                    filtered.push({
+                        ...session,
+                        items: matchingItems,
+                        totalResi: matchingItems.length
+                    });
+                }
+            });
+            return filtered;
+        }
+
+        function applyHistorySearchFilter() {
+            historySearchQuery = document.getElementById('history-search-input').value.trim().toLowerCase();
+            renderPrintHistory();
+        }
+
+        function clearHistorySearch() {
+            document.getElementById('history-search-input').value = '';
+            historySearchQuery = '';
+            renderPrintHistory();
+        }
+
+        // ===== RENDER LOG CETAK =====
+        function renderPrintHistory() {
+            const container = document.getElementById('historyLogList');
+            if (!container) return;
+            const rawHistory = JSON.parse(localStorage.getItem('resi_print_history') || '[]');
+            const history = getHistoryData();
+
+            if (history.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color:var(--text-secondary); font-size:10px; padding:16px 0;">Belum ada histori cetak resi${historySearchQuery ? ' yang cocok.' : '.'}</div>`;
+                document.getElementById('totalResiToday').innerText = '0';
+                updateBadge();
+                return;
+            }
+            const todayStr = formatDateID(new Date());
+            let totalToday = 0;
+            rawHistory.forEach(item => { if (formatDateID(item.id) === todayStr) totalToday += (item.totalResi || 0); });
+            document.getElementById('totalResiToday').innerText = totalToday;
+
+            const groups = {};
+            history.forEach(item => {
+                const dateStr = formatDateID(item.id);
+                if (!groups[dateStr]) groups[dateStr] = { items: [], totalSum: 0 };
+                groups[dateStr].items.push(item);
+                groups[dateStr].totalSum += (item.totalResi || 0);
+            });
+            const sortedDates = Object.keys(groups).sort((a, b) => {
+                const timeA = groups[a].items[0].id;
+                const timeB = groups[b].items[0].id;
+                return timeB - timeA;
+            });
+
+            // Jika sedang mencari, otomatis buka panel detail resi (expanded)
+            const shouldOpen = historySearchQuery !== '';
+
+            let html = '';
+            sortedDates.forEach(date => {
+                const group = groups[date];
+                html += `<div style="margin-bottom:16px; border:1px solid var(--border-light); border-radius:8px; overflow:hidden;">`;
+                html += `<div style="background:var(--whatsapp-dark); color:white; padding:6px 12px; display:flex; justify-content:space-between; font-size:11px; font-weight:bold;"><span>📅 ${date}</span><span>Total: ${group.totalSum} resi</span></div>`;
+                html += `<div style="padding:6px 8px;">`;
+                group.items.forEach((item, idx) => {
+                    const timeOnly = item.timestamp.split(',')[1] || item.timestamp;
+                    const icon = '📄';
+                    html += `<div style="margin-bottom:6px; border:1px solid #e5e7eb; border-radius:6px; background:white;">`;
+                    html += `<div style="display:flex; align-items:center; padding:6px 10px; cursor:pointer; background:#f8f9fa;" onclick="toggleLogDetail(${item.id})">`;
+                    html += `<span style="font-size:18px; margin-right:8px;">${icon}</span>`;
+                    html += `<div style="flex:1;"><div style="font-weight:600; font-size:11px;">Cetak ${item.totalResi} resi</div><div style="font-size:9px; color:var(--text-secondary);">${timeOnly} · ${item.paperLabel} · ${item.resiDim}</div></div>`;
+                    html += `<span style="font-size:14px; color:var(--text-secondary);">${shouldOpen ? '▲' : '▼'}</span>`;
+                    html += `</div>`;
+                    html += `<div class="log-detail-row" id="log-detail-${item.id}" style="display:${shouldOpen ? 'block' : 'none'}; padding:6px 10px; background:#fafafa;">`;
+                    html += `<div class="log-table-container"><table class="log-detail-table"><thead><tr><th>NO.RESI</th><th>NO.PESANAN</th><th>PENGIRIM</th><th>KURIR</th><th>HAL</th></tr></thead><tbody>`;
+                    if (item.items && item.items.length) {
+                        item.items.forEach((i) => {
+                            html += `<tr><td>${i.resi || '-'}</td><td>${i.orderId || '-'}</td><td>${i.pengirim || '-'}</td><td>${i.courier || '-'}</td><td>${i.page || '-'}</td></tr>`;
+                        });
+                    } else {
+                        html += `<tr><td colspan="5" style="text-align:center; color:#999;">Tidak ada detail</td></tr>`;
+                    }
+                    html += `</tbody></table></div>`;
+                    html += `<div style="margin-top:4px; display:flex; gap:6px; justify-content:flex-end;"><button class="btn-red" style="padding:2px 10px; font-size:9px;" onclick="deleteHistoryItem(${item.id}, event)">Hapus</button></div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                });
+                html += `</div></div>`;
+            });
+            container.innerHTML = html;
+            updateBadge();
+        }
+
+        function toggleLogDetail(id) {
+            const row = document.getElementById(`log-detail-${id}`);
+            if (row) {
+                const isOpen = row.style.display === 'table-row' || row.style.display === 'block';
+                row.style.display = isOpen ? 'none' : 'block';
+                const parent = row.closest('div[style*="margin-bottom:6px"]');
+                if (parent) {
+                    const iconSpan = parent.querySelector('span:last-child');
+                    if (iconSpan) iconSpan.textContent = isOpen ? '▼' : '▲';
+                }
+            }
+        }
+
+        function deleteHistoryItem(id, event) {
+            event.stopPropagation();
+            if (!confirm("Hapus catatan cetak ini?")) return;
+            let history = JSON.parse(localStorage.getItem('resi_print_history') || '[]');
+            history = history.filter(item => item.id !== id);
+            localStorage.setItem('resi_print_history', JSON.stringify(history));
+            renderPrintHistory();
+        }
+
+        function clearPrintHistory() {
+            if (!confirm("Hapus semua histori cetak resi?")) return;
+            localStorage.removeItem('resi_print_history');
+            renderPrintHistory();
+        }
+
+        // ===== EXPORT EXCEL (RESI AKTIF) =====
+        function exportActiveResiExcel() {
+            if (cetak_resiData.length === 0) { showToast('⚠️ Tidak ada resi di layar/canvas', 'error'); return; }
+            const now = new Date();
+            const waktuStr = now.toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const excelData = cetak_resiData.map((item) => ({
+                'NO.RESI': item.resi || '-',
+                'NO.PESANAN': item.orderId || '-',
+                'PENGIRIM': item.pengirim || '-',
+                'JASA KIRIM': item.courier || '-',
+                'WAKTU': waktuStr
+            }));
+            if (typeof XLSX === 'undefined') {
+                console.error('XLSX library not loaded! Falling back to CSV.');
+                return exportActiveResiCSV();
+            }
+            try {
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Resi Aktif");
+                const headers = Object.keys(excelData[0]);
+                const max_len = headers.map((key) => {
+                    let max = key.length;
+                    excelData.forEach(row => {
+                        const v = row[key] ? row[key].toString() : '';
+                        if (v.length > max) max = v.length;
+                    });
+                    return max;
+                });
+                ws['!cols'] = max_len.map(w => ({ w: Math.min(w + 5, 50) }));
+                XLSX.writeFile(wb, `Daftar_Resi_Aktif_${Date.now()}.xlsx`);
+                showToast('✅ Excel resi aktif berhasil diunduh. (' + excelData.length + ' baris)');
+            } catch (err) {
+                console.error('XLSX export error:', err);
+                showToast('❌ XLSX gagal, mencoba CSV...', 'error');
+                exportActiveResiCSV();
+            }
+        }
+
+        function exportActiveResiCSV() {
+            if (cetak_resiData.length === 0) { showToast('⚠️ Tidak ada resi di layar/canvas', 'error'); return; }
+            const now = new Date();
+            const waktuStr = now.toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            let csv = 'NO.RESI,NO.PESANAN,PENGIRIM,JASA KIRIM,WAKTU\n';
+            cetak_resiData.forEach(item => {
+                csv += [
+                    item.resi || '-',
+                    item.orderId || '-',
+                    item.pengirim || '-',
+                    item.courier || '-',
+                    waktuStr
+                ].join(',') + '\n';
+            });
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Daftar_Resi_Aktif_${Date.now()}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            showToast('✅ CSV resi aktif berhasil diunduh.');
+        }
+
+        // ===== EXPORT PRINT HISTORY TO EXCEL =====
+        function exportPrintHistoryExcel() {
+            if (typeof XLSX === 'undefined') {
+                console.error('XLSX library not loaded! Falling back to CSV.');
+                return exportPrintHistoryCSV();
+            }
+            const history = getHistoryData();
+            if (history.length === 0) { showToast('⚠️ Tidak ada histori cetak', 'error'); return; }
+            const excelData = [];
+            history.forEach(session => {
+                let sessionDate = '', sessionTime = '';
+                if (session.timestamp) {
+                    const ts = session.timestamp;
+                    if (ts.includes(',')) {
+                        sessionDate = ts.split(',')[0].trim();
+                        sessionTime = ts.split(',')[1]?.trim() || '';
+                    } else if (ts.includes(' at ')) {
+                        sessionDate = ts.split(' at ')[0].trim();
+                        sessionTime = ts.split(' at ')[1]?.trim() || '';
+                    } else {
+                        try {
+                            const d = new Date(session.id || Date.now());
+                            sessionDate = d.toLocaleDateString('id-ID');
+                            sessionTime = d.toLocaleTimeString('id-ID');
+                        } catch (e) {
+                            sessionDate = ts;
+                            sessionTime = ts;
+                        }
+                    }
+                }
+                if (session.items && session.items.length > 0) {
+                    session.items.forEach((item) => {
+                        excelData.push({
+                            'NO.RESI': item.resi || '-',
+                            'NO.PESANAN': item.orderId || '-',
+                            'PENGIRIM': item.pengirim || '-',
+                            'JASA KIRIM': item.courier || '-',
+                            'TANGGAL CETAK': sessionDate,
+                            'JAM CETAK': sessionTime,
+                            'NAMA FILE': item.name || '-',
+                            'HALAMAN': item.page || '-'
+                        });
+                    });
+                } else {
+                    excelData.push({
+                        'NO.RESI': '-',
+                        'NO.PESANAN': '-',
+                        'PENGIRIM': '-',
+                        'JASA KIRIM': '-',
+                        'TANGGAL CETAK': sessionDate,
+                        'JAM CETAK': sessionTime,
+                        'NAMA FILE': 'Summary: ' + (session.totalResi || 0) + ' resi',
+                        'HALAMAN': session.totalPages || '-'
+                    });
+                }
+            });
+            if (excelData.length === 0) { showToast('⚠️ Data histori tidak bisa diproses', 'error'); return; }
+            try {
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Histori Cetak");
+                const headers = Object.keys(excelData[0]);
+                const max_len = headers.map((key) => {
+                    let max = key.length;
+                    excelData.forEach(row => {
+                        const v = row[key] ? row[key].toString() : '';
+                        if (v.length > max) max = v.length;
+                    });
+                    return max;
+                });
+                ws['!cols'] = max_len.map(w => ({ w: Math.min(w + 3, 50) }));
+                XLSX.writeFile(wb, `Histori_Cetak_Resi_${Date.now()}.xlsx`);
+                showToast('✅ Excel histori cetak berhasil diunduh. (' + excelData.length + ' baris)');
+            } catch (err) {
+                console.error('XLSX export error:', err);
+                showToast('❌ XLSX gagal, mencoba CSV...', 'error');
+                exportPrintHistoryCSV();
+            }
+        }
+
+        function exportPrintHistoryCSV() {
+            const history = getHistoryData();
+            if (history.length === 0) { showToast('⚠️ Tidak ada histori cetak', 'error'); return; }
+            let csv = 'NO.RESI,NO.PESANAN,PENGIRIM,JASA KIRIM,TANGGAL CETAK,JAM CETAK,NAMA FILE,HALAMAN\n';
+            history.forEach(session => {
+                let sessionDate = '', sessionTime = '';
+                if (session.timestamp) {
+                    const ts = session.timestamp;
+                    if (ts.includes(',')) {
+                        sessionDate = ts.split(',')[0].trim();
+                        sessionTime = ts.split(',')[1]?.trim() || '';
+                    } else if (ts.includes(' at ')) {
+                        sessionDate = ts.split(' at ')[0].trim();
+                        sessionTime = ts.split(' at ')[1]?.trim() || '';
+                    } else {
+                        try {
+                            const d = new Date(session.id || Date.now());
+                            sessionDate = d.toLocaleDateString('id-ID');
+                            sessionTime = d.toLocaleTimeString('id-ID');
+                        } catch (e) {
+                            sessionDate = ts;
+                            sessionTime = ts;
+                        }
+                    }
+                }
+                if (session.items && session.items.length > 0) {
+                    session.items.forEach((item) => {
+                        csv += [
+                            item.resi || '-',
+                            item.orderId || '-',
+                            item.pengirim || '-',
+                            item.courier || '-',
+                            sessionDate,
+                            sessionTime,
+                            (item.name || '-').replace(/,/g, ' '),
+                            item.page || '-'
+                        ].join(',') + '\n';
+                    });
+                } else {
+                    csv += [
+                        '-',
+                        '-',
+                        '-',
+                        '-',
+                        sessionDate,
+                        sessionTime,
+                        'Summary: ' + (session.totalResi || 0) + ' resi',
+                        session.totalPages || '-'
+                    ].join(',') + '\n';
+                }
+            });
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Histori_Cetak_Resi_${Date.now()}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            showToast('✅ CSV histori cetak berhasil diunduh.');
+        }
+
+        // ===== EXPORT PRINT HISTORY TO PDF =====
+        function exportPrintHistoryPDF() {
+            const history = getHistoryData();
+            if (history.length === 0) { showToast('⚠️ Tidak ada histori cetak', 'error'); return; }
+            const wrapper = document.createElement('div');
+            wrapper.style.padding = '16px';
+            wrapper.style.fontFamily = 'Inter, sans-serif';
+            wrapper.style.background = 'white';
+            wrapper.style.maxWidth = '800px';
+            wrapper.style.margin = '0 auto';
+            const title = document.createElement('h2');
+            title.textContent = '📄 HISTORI CETAK RESI';
+            title.style.color = '#075E54';
+            title.style.marginBottom = '16px';
+            wrapper.appendChild(title);
+            const groups = {};
+            history.forEach(item => {
+                const dateStr = formatDateID(item.id);
+                if (!groups[dateStr]) groups[dateStr] = { items: [], totalSum: 0 };
+                groups[dateStr].items.push(item);
+                groups[dateStr].totalSum += (item.totalResi || 0);
+            });
+            const sortedDates = Object.keys(groups).sort((a, b) => { const ta = groups[a].items[0].id; const tb = groups[b].items[0].id; return tb - ta; });
+            sortedDates.forEach(date => {
+                const group = groups[date];
+                const div = document.createElement('div');
+                div.style.border = '1px solid #e5e7eb';
+                div.style.borderRadius = '8px';
+                div.style.marginBottom = '12px';
+                div.style.overflow = 'hidden';
+                const header = document.createElement('div');
+                header.style.background = '#075E54';
+                header.style.color = 'white';
+                header.style.padding = '8px 14px';
+                header.style.display = 'flex';
+                header.style.justifyContent = 'space-between';
+                header.style.fontWeight = '600';
+                header.style.fontSize = '13px';
+                header.innerHTML = `<span>📅 ${date}</span><span>Total: ${group.totalSum} resi</span>`;
+                div.appendChild(header);
+                const body = document.createElement('div');
+                body.style.padding = '8px 12px';
+                body.style.background = '#F0F2F5';
+                group.items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.style.background = 'white';
+                    card.style.borderRadius = '6px';
+                    card.style.padding = '8px 12px';
+                    card.style.marginBottom = '4px';
+                    card.style.borderLeft = '4px solid #25D366';
+                    const timeOnly = item.timestamp.split(',')[1] || item.timestamp;
+                    let itemsListHtml = '';
+                    if (item.items && item.items.length) {
+                        itemsListHtml = `<div style="margin-top:6px; padding-top:4px; border-top:1px dashed #e5e7eb; font-size:9px; color:#555;"><div style="font-weight:bold; margin-bottom:2px;">Daftar Item:</div>${item.items.map((i, idx) => `<div>${idx+1}. ${escapeHtml(i.name)} | Resi: ${i.resi} | Pesanan: ${i.orderId} | Pengirim: ${i.pengirim} | Kurir: ${i.courier}</div>`).join('')}</div>`;
+                    }
+                    card.innerHTML = `<div style="color:#667781;font-size:10px;font-weight:bold;">🕒 ${timeOnly}</div><div style="font-size:11px;margin-top:2px;">Kertas: <strong>${item.paperLabel}</strong></div><div style="font-size:11px;">Ukuran Resi: <strong>${item.resiDim}</strong></div><div style="display:flex;justify-content:space-between;margin-top:4px;border-top:1px dashed #e5e7eb;padding-top:4px;font-size:11px;"><span>Cetak: <strong>${item.totalResi} resi</strong></span><span>Halaman: <strong>${item.totalPages}</strong></span></div>${itemsListHtml}`;
+                    body.appendChild(card);
+                });
+                div.appendChild(body);
+                wrapper.appendChild(div);
+            });
+            document.body.appendChild(wrapper);
+            html2pdf().set({ margin: [8, 8, 8, 8], filename: 'Histori_Cetak_Resi.pdf', image: { type: 'jpeg', quality: 0.85 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } }).from(wrapper).save().then(() => { wrapper.remove(); showToast('✅ PDF histori cetak selesai.'); }).catch(err => { console.error(err); wrapper.remove(); showToast('❌ Gagal membuat PDF', 'error'); });
+        }
+
+        // ============================================================
+        //  LOGIKA PINTASAN SEMBUL / FLOATING BUBBLE (DRAGGABLE)
+        // ============================================================
+        const fBubble = document.getElementById('floating-bubble');
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+
+        // Muat posisi yang tersimpan (dipanggil juga di doLogin)
+        function loadBubblePosition() {
+            const savedLeft = localStorage.getItem('bubbleLeft');
+            const savedTop = localStorage.getItem('bubbleTop');
+            if (savedLeft && savedTop) {
+                fBubble.style.left = savedLeft;
+                fBubble.style.top = savedTop;
+                fBubble.style.right = 'auto';
+                fBubble.style.bottom = 'auto';
+            }
+        }
+
+        fBubble.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+
+        fBubble.addEventListener('touchstart', dragStart, { passive: false });
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('touchend', dragEnd);
+
+        function dragStart(e) {
+            if (e.type === 'touchstart') {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            } else {
+                startX = e.clientX;
+                startY = e.clientY;
+            }
+            const rect = fBubble.getBoundingClientRect();
+            initialX = rect.left;
+            initialY = rect.top;
+            isDragging = true;
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            let currentX, currentY;
+            if (e.type === 'touchmove') {
+                currentX = e.touches[0].clientX;
+                currentY = e.touches[0].clientY;
+            } else {
+                currentX = e.clientX;
+                currentY = e.clientY;
+            }
+            const dx = currentX - startX;
+            const dy = currentY - startY;
+
+            let targetX = initialX + dx;
+            let targetY = initialY + dy;
+
+            // Batasi agar tidak melampaui ukuran layar browser
+            const maxW = window.innerWidth - fBubble.offsetWidth;
+            const maxH = window.innerHeight - fBubble.offsetHeight;
+            if (targetX < 0) targetX = 0;
+            if (targetX > maxW) targetX = maxW;
+            if (targetY < 0) targetY = 0;
+            if (targetY > maxH) targetY = maxH;
+
+            fBubble.style.left = targetX + 'px';
+            fBubble.style.top = targetY + 'px';
+            fBubble.style.right = 'auto';
+            fBubble.style.bottom = 'auto';
+        }
+
+        function dragEnd() {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            // Simpan posisi
+            localStorage.setItem('bubbleLeft', fBubble.style.left);
+            localStorage.setItem('bubbleTop', fBubble.style.top);
+
+            const rect = fBubble.getBoundingClientRect();
+            const distanceX = Math.abs(rect.left - initialX);
+            const distanceY = Math.abs(rect.top - initialY);
+            
+            // Jika perpindahan kurang dari 5px, anggap sebagai click (bukan drag)
+            if (distanceX < 5 && distanceY < 5) {
+                switchModule('chat');
+            }
+        }
+
+        // ===== EVENT LISTENERS =====
+        document.getElementById('paperType').onchange = (e) => {
+            document.getElementById('customDim').style.display = e.target.value === 'custom' ? 'inline' : 'none';
+            updateCetakUI();
+        };
+        const triggers = ['custW', 'custH', 'imgW', 'imgH', 'imgGap', 'cropLen', 'cropLenNum', 'cropThick', 'cropThickNum', 'cropOffset', 'cropOffsetNum', 'showCrop'];
+        triggers.forEach(id => { const el = document.getElementById(id); if (el) el.oninput = updateCetakUI; });
+        const rWR = document.getElementById('resiWidthRange'), rWN = document.getElementById('resiWidthNum');
+        const rHR = document.getElementById('resiHeightRange'), rHN = document.getElementById('resiHeightNum');
+        rWR.oninput = () => { rWN.value = rWR.value; updateCetakUI(); };
+        rWN.oninput = () => { rWR.value = rWN.value; updateCetakUI(); };
+        rHR.oninput = () => { rHN.value = rHR.value; updateCetakUI(); };
+        rHN.oninput = () => { rHR.value = rHN.value; updateCetakUI(); };
+        const sync = (rangeId, numId) => {
+            const r = document.getElementById(rangeId), n = document.getElementById(numId);
+            if (r && n) { r.oninput = () => { n.value = r.value; updateCetakUI(); }; n.oninput = () => { r.value = n.value; updateCetakUI(); }; }
+        };
+        sync('cropLen', 'cropLenNum');
+        sync('cropThick', 'cropThickNum');
+        sync('cropOffset', 'cropOffsetNum');
+
+        // ===== INISIALISASI =====
+        loadAssets();
+        renderPrintHistory();
+        updateChatImagesUI();
+        loadUploadHistory();
+        loadBubblePosition(); // Muat posisi bubble
+        setTimeout(() => {
+            updateChatImagesUI();
+            checkPaddleOCRServer(); // auto check server
+        }, 1000);
+        console.log('✅ Aplikasi terintegrasi dengan PaddleOCR dan TURN server siap pakai.');
+        
+        // Tambahan untuk komunikasi dengan Electron
+if (window.electronAPI) {
+  // Saat bubble diklik, kita panggil showMainWindow dari main process
+  // Tapi kita tidak perlu karena kita punya bubble.html yang independen.
+  // Namun kita bisa menambahkan listener untuk menampilkan window jika diperlukan.
+  console.log('Electron API siap');
+}
+    </script>
+</body>
+</html>

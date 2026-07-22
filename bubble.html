@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bubble</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: transparent !important;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    #bubble {
+      width: 60px;
+      height: 60px;
+      background: #25D366;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      color: white;
+      font-size: 30px;
+      cursor: pointer;
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      transition: transform 0.1s;
+      -webkit-app-region: no-drag;
+    }
+    #bubble:active {
+      transform: scale(0.9);
+    }
+    #badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: #ef4444;
+      color: white;
+      border-radius: 50%;
+      min-width: 20px;
+      height: 20px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="bubble">
+    
+    <span id="badge">0</span>
+  </div>
+
+  <script>
+    // ============================================================
+    //  BUBBLE RENDERER JS – Drag & Komunikasi dengan Main Window
+    // ============================================================
+
+    const bubble = document.getElementById('bubble');
+    const badge = document.getElementById('badge');
+
+    // ===== DRAG (agar bubble bisa digeser) =====
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+
+    function onStart(e) {
+      const ev = e.touches ? e.touches[0] : e;
+      startX = ev.clientX;
+      startY = ev.clientY;
+      const rect = bubble.getBoundingClientRect();
+      initialX = rect.left;
+      initialY = rect.top;
+      isDragging = true;
+    }
+
+    function onMove(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      const ev = e.touches ? e.touches[0] : e;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let newX = initialX + dx;
+      let newY = initialY + dy;
+      // Batasi agar tidak keluar layar
+      const maxX = window.innerWidth - bubble.offsetWidth;
+      const maxY = window.innerHeight - bubble.offsetHeight;
+      newX = Math.max(0, Math.min(newX, maxX));
+      newY = Math.max(0, Math.min(newY, maxY));
+      bubble.style.left = newX + 'px';
+      bubble.style.top = newY + 'px';
+    }
+
+    function onEnd() {
+      if (!isDragging) return;
+      isDragging = false;
+      // Jika perpindahan kecil, anggap klik
+      const rect = bubble.getBoundingClientRect();
+      const dist = Math.abs(rect.left - initialX) + Math.abs(rect.top - initialY);
+      if (dist < 10) {
+        // Klik bubble  tampilkan main window
+        if (window.electronAPI) {
+          window.electronAPI.showMainWindow();
+        } else {
+          // Fallback jika bukan di Electron
+          alert('Buka aplikasi utama');
+        }
+      }
+    }
+
+    bubble.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    bubble.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+
+    // ===== UPDATE BADGE (dari localStorage) =====
+    function updateBadge() {
+      try {
+        const unread = JSON.parse(localStorage.getItem('tfl_unread') || '{}');
+        let total = 0;
+        Object.values(unread).forEach(v => total += v);
+        if (total > 0) {
+          badge.textContent = total;
+          badge.style.display = 'flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      } catch (e) {
+        badge.style.display = 'none';
+      }
+    }
+
+    // Update badge setiap 2 detik (atau bisa pakai event storage)
+    setInterval(updateBadge, 2000);
+    updateBadge();
+
+    // Dengarkan perubahan storage dari tab lain
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'tfl_unread') updateBadge();
+    });
+
+    console.log('Bubble siap');
+  </script>
+</body>
+</html>
