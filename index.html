@@ -598,17 +598,194 @@
         let activeChatId = 'broadcast'; // Menentukan chatroom aktif ('broadcast' atau 'peer-id')
         let unreadCounts = {}; // Menyimpan jumlah pesan belum terbaca berdasarkan chatroom
 
-        function saveMessageHistory() { try { localStorage.setItem('tfl_messageHistory', JSON.stringify(messageHistory)); } catch (e) {} }
+        // ===== CETAK STATE =====
+        let cetak_currentMode = 'resi';
+        let cetak_resiData = [];
+        let cetak_imageData = [];
+        let cetak_assetList = [];
+        let cetak_uploadedImages = [];
+        let cetak_uploadedHistory = [];
+
+        // ============================================================
+        //  PERSISTENSI STATE LENGKAP (tfl_app_state)
+        // ============================================================
+        function saveAppState() {
+            const state = {
+                version: '1.0',
+                messageHistory: messageHistory,
+                jobs: jobs,
+                cetak_resiData: cetak_resiData,
+                cetak_imageData: cetak_imageData,
+                cetak_uploadedImages: cetak_uploadedImages,
+                cetak_uploadedHistory: cetak_uploadedHistory,
+                activeChatId: activeChatId,
+                cetak_currentMode: cetak_currentMode,
+                unreadCounts: unreadCounts,
+                sharedImages: sharedImages,
+                msgIdCounter: msgIdCounter
+            };
+            try {
+                localStorage.setItem('tfl_app_state', JSON.stringify(state));
+                // juga simpan secara terpisah untuk kompatibilitas
+                localStorage.setItem('tfl_messageHistory', JSON.stringify(messageHistory));
+                localStorage.setItem('tfl_uploadHistory', JSON.stringify(cetak_uploadedHistory));
+                localStorage.setItem('tfl_unread', JSON.stringify(unreadCounts));
+                localStorage.setItem('tfl_jobs', JSON.stringify(jobs));
+            } catch (e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    showToast('⚠️ Penyimpanan penuh! Data tidak bisa disimpan. Hapus beberapa data (residu/gambar).', 'error');
+                } else {
+                    console.error('Gagal menyimpan state:', e);
+                }
+            }
+        }
+
+        function loadAppState() {
+            const saved = localStorage.getItem('tfl_app_state');
+            if (!saved) return false;
+            try {
+                const state = JSON.parse(saved);
+                messageHistory = state.messageHistory || [];
+                jobs = state.jobs || [{ files: [], inv: '', ket: '' }];
+                cetak_resiData = state.cetak_resiData || [];
+                cetak_imageData = state.cetak_imageData || [];
+                cetak_uploadedImages = state.cetak_uploadedImages || [];
+                cetak_uploadedHistory = state.cetak_uploadedHistory || [];
+                activeChatId = state.activeChatId || 'broadcast';
+                cetak_currentMode = state.cetak_currentMode || 'resi';
+                unreadCounts = state.unreadCounts || {};
+                sharedImages = state.sharedImages || [];
+                msgIdCounter = state.msgIdCounter || messageHistory.length;
+                return true;
+            } catch (e) {
+                console.error('Gagal memuat state:', e);
+                return false;
+            }
+        }
+
+        // ===== FUNGSI PEMBANTU PERSISTENSI =====
+        function saveMessageHistory() { 
+            try { 
+                localStorage.setItem('tfl_messageHistory', JSON.stringify(messageHistory)); 
+                saveAppState(); // simpan state lengkap
+            } catch (e) {} 
+        }
         function loadMessageHistory() {
+            // coba dari state lengkap dulu
+            const fullState = localStorage.getItem('tfl_app_state');
+            if (fullState) {
+                try {
+                    const state = JSON.parse(fullState);
+                    if (state.messageHistory) {
+                        messageHistory = state.messageHistory;
+                        sharedImages = state.sharedImages || [];
+                        msgIdCounter = state.msgIdCounter || messageHistory.length;
+                        // rebuild sharedImages dari messageHistory jika kosong
+                        if (sharedImages.length === 0 && messageHistory.length > 0) {
+                            messageHistory.forEach(msg => {
+                                if (msg.jobs) msg.jobs.forEach(job => {
+                                    if (job.files) job.files.forEach(file => {
+                                        if (file.type && file.type.startsWith('image/')) {
+                                            sharedImages.push({ 
+                                                id: Date.now() + Math.random(), 
+                                                src: file.data, 
+                                                name: file.name, 
+                                                from: msg.type === 'out' ? 'Anda' : (msg.sender || 'Unknown'), 
+                                                timestamp: msg.timestamp || Date.now() 
+                                            });
+                                        }
+                                    });
+                                });
+                            });
+                        }
+                        return;
+                    }
+                } catch (e) {}
+            }
+            
+            // fallback: load dari key terpisah
             const stored = localStorage.getItem('tfl_messageHistory');
             if (stored) try {
                 messageHistory = JSON.parse(stored);
                 sharedImages = [];
-                messageHistory.forEach(msg => { if (msg.jobs) msg.jobs.forEach(job => { if (job.files) job.files.forEach(file => { if (file.type && file.type.startsWith('image/')) sharedImages.push({ id: Date.now() + Math.random(), src: file.data, name: file.name, from: msg.type === 'out' ? 'Anda' : (msg.sender || 'Unknown'), timestamp: msg.timestamp || Date.now() }); }); }); });
-                let maxUid = 0; messageHistory.forEach(m => { if (m._uid && m._uid > maxUid) maxUid = m._uid; });
+                messageHistory.forEach(msg => {
+                    if (msg.jobs) msg.jobs.forEach(job => {
+                        if (job.files) job.files.forEach(file => {
+                            if (file.type && file.type.startsWith('image/')) {
+                                sharedImages.push({ 
+                                    id: Date.now() + Math.random(), 
+                                    src: file.data, 
+                                    name: file.name, 
+                                    from: msg.type === 'out' ? 'Anda' : (msg.sender || 'Unknown'), 
+                                    timestamp: msg.timestamp || Date.now() 
+                                });
+                            }
+                        });
+                    });
+                });
+                let maxUid = 0; 
+                messageHistory.forEach(m => { if (m._uid && m._uid > maxUid) maxUid = m._uid; });
                 msgIdCounter = maxUid || messageHistory.length;
             } catch (e) { messageHistory = []; sharedImages = []; msgIdCounter = 0; } else { messageHistory = []; sharedImages = []; msgIdCounter = 0; }
-            renderMessageHistory(); updateChatImagesUI();
+            
+            // simpan ulang ke state lengkap
+            saveAppState();
+        }
+
+        function saveCetakState() {
+            saveAppState();
+        }
+
+        function loadCetakState() {
+            const saved = localStorage.getItem('tfl_app_state');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    cetak_resiData = state.cetak_resiData || [];
+                    cetak_imageData = state.cetak_imageData || [];
+                    cetak_uploadedImages = state.cetak_uploadedImages || [];
+                    cetak_uploadedHistory = state.cetak_uploadedHistory || [];
+                    cetak_currentMode = state.cetak_currentMode || 'resi';
+                    return true;
+                } catch (e) {}
+            }
+            // fallback: load upload history terpisah
+            const stored = localStorage.getItem('tfl_uploadHistory');
+            if (stored) {
+                try { cetak_uploadedHistory = JSON.parse(stored); } catch (e) { cetak_uploadedHistory = []; }
+            } else { cetak_uploadedHistory = []; }
+            return false;
+        }
+
+        function saveJobs() {
+            try { 
+                localStorage.setItem('tfl_jobs', JSON.stringify(jobs)); 
+                saveAppState();
+            } catch (e) {}
+        }
+
+        function loadJobs() {
+            const saved = localStorage.getItem('tfl_jobs');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.length) jobs = parsed;
+                } catch (_) {}
+            }
+        }
+
+        function saveUnreadCounts() {
+            try { 
+                localStorage.setItem('tfl_unread', JSON.stringify(unreadCounts)); 
+                saveAppState();
+            } catch (e) {}
+        }
+
+        function loadUnreadCounts() {
+            const saved = localStorage.getItem('tfl_unread');
+            if (saved) {
+                try { unreadCounts = JSON.parse(saved); } catch (e) { unreadCounts = {}; }
+            }
         }
 
         // ============================================================
@@ -688,20 +865,49 @@
             document.getElementById('chat-app').classList.add('active'); 
             document.getElementById('my-id').innerText = chat_myId; 
             document.getElementById('my-avatar').innerText = chat_myId.charAt(0).toUpperCase(); 
+            
+            // ===== MUAT STATE LENGKAP =====
+            loadAppState();
+            loadUnreadCounts();
+            loadJobs();
+            
             initPeer(); 
             renderJobs(); 
             loadMessageHistory(); 
             updatePeerList(); 
             requestNotificationPermission();
-            const saved = sessionStorage.getItem('tfl_jobs'); 
-            if (saved) { 
-                try { 
-                    const parsed = JSON.parse(saved); 
-                    if (parsed.length) jobs = parsed; 
-                    renderJobs(); 
-                } catch (_) {} 
-            } 
-            reconnectSavedPeers(); 
+            
+            // Restore cetak state
+            loadCetakState();
+            
+            // Restore tab aktif
+            const savedTab = localStorage.getItem('tfl_active_tab');
+            if (savedTab === 'cetak') {
+                switchModule('cetak');
+            } else {
+                switchModule('chat');
+            }
+            
+            // Restore cetak mode
+            if (cetak_currentMode) {
+                openCetakTab(cetak_currentMode);
+            }
+            
+            // Restore activeChatId
+            if (activeChatId) {
+                selectChat(activeChatId);
+            }
+            
+            updateCetakUI();
+            renderUploadHistory();
+            renderPrintHistory();
+            updateChatImagesUI();
+            updateUnreadBadges();
+            
+            // Jika ada data resi, render ulang
+            if (cetak_resiData.length > 0 || cetak_imageData.length > 0) {
+                updateCetakUI();
+            }
             
             // Tampilkan ikon sembul melayang
             document.getElementById('floating-bubble').style.display = 'flex';
@@ -715,12 +921,27 @@
                 bubble.style.right = 'auto';
                 bubble.style.bottom = 'auto';
             }
+            
+            reconnectSavedPeers(); 
         }
         
         (function autoLogin() { const stored = localStorage.getItem('tfl_id'); if (stored) { document.getElementById('login-name').value = stored; setTimeout(doLogin, 100); } })();
-        function logout() { if (peer) peer.destroy(); localStorage.removeItem('tfl_id'); localStorage.removeItem('tfl_peers'); localStorage.removeItem('tfl_messageHistory'); sessionStorage.removeItem('tfl_jobs'); location.reload(); }
+        
+        function logout() { 
+            if (peer) peer.destroy(); 
+            localStorage.removeItem('tfl_id'); 
+            localStorage.removeItem('tfl_peers'); 
+            localStorage.removeItem('tfl_messageHistory'); 
+            localStorage.removeItem('tfl_jobs');
+            localStorage.removeItem('tfl_app_state');
+            localStorage.removeItem('tfl_active_tab');
+            sessionStorage.removeItem('tfl_jobs'); 
+            location.reload(); 
+        }
+        
         function refreshApp() { 
-            sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); 
+            saveJobs();
+            saveAppState();
             const peerIds = conns.map(c => c.peer); 
             localStorage.setItem('tfl_peers', JSON.stringify(peerIds)); 
             if (peer) { 
@@ -731,7 +952,25 @@
             initPeer(); 
             showToast('🔄 Refresh, menyambung ulang...'); 
         }
-        function changeId() { const password = prompt("Masukkan password untuk mengganti ID:"); if (password !== "gantisaja") { alert("Password salah!"); return; } const newId = prompt("Masukkan ID baru:"); if (!newId) return; if (newId === chat_myId) { alert("ID sama dengan yang sekarang."); return; } if (peer) peer.destroy(); localStorage.setItem('tfl_id', newId); chat_myId = newId; conns = []; messageHistory = []; saveMessageHistory(); document.getElementById('my-id').innerText = chat_myId; document.getElementById('my-avatar').innerText = chat_myId.charAt(0).toUpperCase(); initPeer(); showToast('✅ ID diubah menjadi: ' + chat_myId); loadMessageHistory(); }
+        
+        function changeId() { 
+            const password = prompt("Masukkan password untuk mengganti ID:"); 
+            if (password !== "gantisaja") { alert("Password salah!"); return; } 
+            const newId = prompt("Masukkan ID baru:"); 
+            if (!newId) return; 
+            if (newId === chat_myId) { alert("ID sama dengan yang sekarang."); return; } 
+            if (peer) peer.destroy(); 
+            localStorage.setItem('tfl_id', newId); 
+            chat_myId = newId; 
+            conns = []; 
+            messageHistory = []; 
+            saveMessageHistory(); 
+            document.getElementById('my-id').innerText = chat_myId; 
+            document.getElementById('my-avatar').innerText = chat_myId.charAt(0).toUpperCase(); 
+            initPeer(); 
+            showToast('✅ ID diubah menjadi: ' + chat_myId); 
+            loadMessageHistory(); 
+        }
         
         // ============================================================
         //  PEERJS CONNECTION DENGAN STUN + TURN SERVER (untuk tembus firewall)
@@ -775,7 +1014,6 @@
             peer.on('connection', conn => setupConn(conn));
             peer.on('error', err => {
                 console.error('Peer error:', err);
-                // Jangan ubah status ke error jika hanya peer-unavailable
                 if (err.type === 'peer-unavailable') {
                     showToast('⚠️ Partner tidak ditemukan!', 'error');
                 } else if (err.type === 'network') {
@@ -810,7 +1048,6 @@
             const tid = document.getElementById('target-id').value.trim();
             if (!tid || tid === chat_myId) return showToast('⚠️ ID tidak valid', 'error');
             if (conns.find(c => c.peer === tid)) return showToast('⚠️ Sudah terhubung', 'error');
-            // Jangan ubah status global, cukup toast
             const conn = peer.connect(tid, { reliable: true });
             setupConn(conn);
             document.getElementById('target-id').value = '';
@@ -845,7 +1082,6 @@
                 showSystemNotification('Partner Terputus', `ID: ${conn.peer} telah kehilangan koneksi.`);
             });
             conn.on('error', (err) => {
-                // Hanya tampilkan toast, jangan ubah status global
                 console.warn('Koneksi error dengan', conn.peer, err);
                 if (err.message && err.message.includes('peer unavailable')) {
                     showToast('❌ Gagal terhubung ke ' + conn.peer, 'error');
@@ -936,9 +1172,11 @@
 
         function selectChat(chatId) {
             activeChatId = chatId;
+            saveAppState();
             
             // Hapus unread di ruangan ini
             unreadCounts[chatId] = 0;
+            saveUnreadCounts();
             updateUnreadBadges();
             
             // Update UI sidebar
@@ -965,38 +1203,36 @@
         }
 
         function updateUnreadBadges() {
-  let total = 0;
-  Object.keys(unreadCounts).forEach(k => { total += unreadCounts[k] || 0; });
-  
-  // 1. Update Floating Bubble di dalam aplikasi utama (jika ada)
-  const fBadge = document.getElementById('bubble-badge');
-  if (fBadge) {
-    if (total > 0) {
-      fBadge.innerText = total;
-      fBadge.style.display = 'flex';
-    } else {
-      fBadge.style.display = 'none';
-    }
-  }
-  
-  // 2. Update Tab Chat Badge
-  let tabBadge = document.getElementById('tab-chat-badge');
-  if (total > 0) {
-    if (!tabBadge) {
-      const btn = document.getElementById('tab-chat');
-      btn.innerHTML = `💬 Chat <span class="tab-badge" id="tab-chat-badge">${total}</span>`;
-    } else {
-      tabBadge.innerText = total;
-    }
-  } else {
-    if (tabBadge) tabBadge.remove();
-  }
+            let total = 0;
+            Object.keys(unreadCounts).forEach(k => { total += unreadCounts[k] || 0; });
+            
+            // 1. Update Floating Bubble di dalam aplikasi utama (jika ada)
+            const fBadge = document.getElementById('bubble-badge');
+            if (fBadge) {
+                if (total > 0) {
+                    fBadge.innerText = total;
+                    fBadge.style.display = 'flex';
+                } else {
+                    fBadge.style.display = 'none';
+                }
+            }
+            
+            // 2. Update Tab Chat Badge
+            let tabBadge = document.getElementById('tab-chat-badge');
+            if (total > 0) {
+                if (!tabBadge) {
+                    const btn = document.getElementById('tab-chat');
+                    btn.innerHTML = `💬 Chat <span class="tab-badge" id="tab-chat-badge">${total}</span>`;
+                } else {
+                    tabBadge.innerText = total;
+                }
+            } else {
+                if (tabBadge) tabBadge.remove();
+            }
 
-  // 3. SIMPAN KE LOCALSTORAGE UNTUK BUBBLE EKSTERNAL (dalam bentuk object)
-  try {
-    localStorage.setItem('tfl_unread', JSON.stringify(unreadCounts));
-  } catch (e) {}
-}
+            // 3. SIMPAN KE LOCALSTORAGE UNTUK BUBBLE EKSTERNAL (dalam bentuk object)
+            saveUnreadCounts();
+        }
 
         function disconnectPeer(pid, event) { 
             if (event) event.stopPropagation();
@@ -1004,14 +1240,15 @@
             if (c) c.close(); 
             if (activeChatId === pid) activeChatId = 'broadcast';
             savePeerList(); 
+            saveAppState();
         }
         function getConnectedPeers() { return conns.filter(c => c.open).map(c => c.peer); }
-        function addJob() { jobs.push({ files: [], inv: '', ket: '' }); activeJobIdx = jobs.length - 1; renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); }
-        function removeJob(idx) { if (jobs.length > 1) { jobs.splice(idx, 1); if (activeJobIdx >= jobs.length) activeJobIdx = jobs.length - 1; renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); } else showToast('⚠️ Minimal satu baris!', 'error'); }
+        function addJob() { jobs.push({ files: [], inv: '', ket: '' }); activeJobIdx = jobs.length - 1; renderJobs(); saveJobs(); saveAppState(); }
+        function removeJob(idx) { if (jobs.length > 1) { jobs.splice(idx, 1); if (activeJobIdx >= jobs.length) activeJobIdx = jobs.length - 1; renderJobs(); saveJobs(); saveAppState(); } else showToast('⚠️ Minimal satu baris!', 'error'); }
         function triggerFileSelect(idx) { activeJobIdx = idx; document.getElementById('file-input').click(); }
-        async function handleFileSelect(input) { if (!input.files.length || activeJobIdx === null || activeJobIdx >= jobs.length) return; const MAX_SIZE = 5 * 1024 * 1024; for (const file of input.files) { const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'); if (file.size > MAX_SIZE) { showToast(`⚠️ "${file.name}" > 5 MB`, 'error'); continue; } try { const data = await toBase64(file); jobs[activeJobIdx].files.push({ data, name: file.name, type: file.type || (isPdf ? 'application/pdf' : 'application/octet-stream'), isPdf }); } catch (e) { console.error('File read error', e); } } renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); input.value = ''; }
-        function removeFile(jIdx, fIdx) { if (jobs[jIdx] && jobs[jIdx].files) { jobs[jIdx].files.splice(fIdx, 1); renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); } }
-        function renderJobs() { const list = document.getElementById('job-list'); list.innerHTML = ''; jobs.forEach((job, idx) => { const row = document.createElement('div'); row.className = 'job-row'; const thumbs = job.files.map((f, fIdx) => { const isPdf = f.isPdf || (f.name && f.name.toLowerCase().endsWith('.pdf')); if (isPdf) return `<div class="thumb-box" style="display:flex;align-items:center;justify-content:center;background:#fee2e2;font-size:1.2rem;">📄<div class="del" onclick="removeFile(${idx}, ${fIdx})">×</div></div>`; return `<div class="thumb-box"><img src="${f.data}" onerror="this.style.display='none'; this.parentElement.style.background='#eee';"><div class="del" onclick="removeFile(${idx}, ${fIdx})">×</div></div>`; }).join(''); row.innerHTML = `<div class="top"><span class="label">BARIS ${idx+1}</span><button class="remove-job" onclick="removeJob(${idx})">🗑</button></div><div class="thumb-row">${thumbs}<div class="add-thumb" onclick="triggerFileSelect(${idx})">+</div></div><input type="text" class="input" placeholder="No. Invoice (INV)" value="${escapeHtml(job.inv)}" oninput="jobs[${idx}].inv = this.value; sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs));"><textarea class="input" placeholder="Keterangan..." rows="1" oninput="jobs[${idx}].ket = this.value; sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs));">${escapeHtml(job.ket)}</textarea>`; list.appendChild(row); }); }
+        async function handleFileSelect(input) { if (!input.files.length || activeJobIdx === null || activeJobIdx >= jobs.length) return; const MAX_SIZE = 5 * 1024 * 1024; for (const file of input.files) { const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'); if (file.size > MAX_SIZE) { showToast(`⚠️ "${file.name}" > 5 MB`, 'error'); continue; } try { const data = await toBase64(file); jobs[activeJobIdx].files.push({ data, name: file.name, type: file.type || (isPdf ? 'application/pdf' : 'application/octet-stream'), isPdf }); } catch (e) { console.error('File read error', e); } } renderJobs(); saveJobs(); saveAppState(); input.value = ''; }
+        function removeFile(jIdx, fIdx) { if (jobs[jIdx] && jobs[jIdx].files) { jobs[jIdx].files.splice(fIdx, 1); renderJobs(); saveJobs(); saveAppState(); } }
+        function renderJobs() { const list = document.getElementById('job-list'); list.innerHTML = ''; jobs.forEach((job, idx) => { const row = document.createElement('div'); row.className = 'job-row'; const thumbs = job.files.map((f, fIdx) => { const isPdf = f.isPdf || (f.name && f.name.toLowerCase().endsWith('.pdf')); if (isPdf) return `<div class="thumb-box" style="display:flex;align-items:center;justify-content:center;background:#fee2e2;font-size:1.2rem;">📄<div class="del" onclick="removeFile(${idx}, ${fIdx})">×</div></div>`; return `<div class="thumb-box"><img src="${f.data}" onerror="this.style.display='none'; this.parentElement.style.background='#eee';"><div class="del" onclick="removeFile(${idx}, ${fIdx})">×</div></div>`; }).join(''); row.innerHTML = `<div class="top"><span class="label">BARIS ${idx+1}</span><button class="remove-job" onclick="removeJob(${idx})">🗑</button></div><div class="thumb-row">${thumbs}<div class="add-thumb" onclick="triggerFileSelect(${idx})">+</div></div><input type="text" class="input" placeholder="No. Invoice (INV)" value="${escapeHtml(job.inv)}" oninput="jobs[${idx}].inv = this.value; saveJobs(); saveAppState();"><textarea class="input" placeholder="Keterangan..." rows="1" oninput="jobs[${idx}].ket = this.value; saveJobs(); saveAppState();">${escapeHtml(job.ket)}</textarea>`; list.appendChild(row); }); }
         
         // ============================================================
         //  PENGIRIMAN DATA PRIVATE VS BROADCAST
@@ -1040,14 +1277,12 @@
             let sentCount = 0; 
             
             if (isBroadcastMode) {
-                // Broadcast ke seluruh partner yang terkoneksi
                 conns.forEach(c => { 
                     if (c.open) { 
                         try { c.send(payload); sentCount++; } catch (e) { console.error('Send error to', c.peer, e); } 
                     } 
                 });
             } else {
-                // Hanya kirim privat ke partner tertentu yang aktif
                 const targetConn = conns.find(c => c.peer === activeChatId && c.open);
                 if (targetConn) {
                     try { targetConn.send(payload); sentCount++; } catch (e) { console.error('Private send error to', activeChatId, e); }
@@ -1059,7 +1294,6 @@
             
             if (sentCount === 0) { showToast('❌ Gagal mengirim. Koneksi belum siap.', 'error'); return; }
             
-            // Tambahkan ke riwayat pesan pengirim
             addMessageToHistory({ 
                 type: 'out', 
                 sender: chat_myId, 
@@ -1074,15 +1308,15 @@
             });
             
             jobsClone.forEach(job => { if (job.files) { job.files.forEach(file => { if (file.type && file.type.startsWith('image/')) { sharedImages.push({ id: Date.now() + Math.random(), src: file.data, name: file.name, from: 'Anda', timestamp: Date.now() }); } }); } });
-            jobs = [{ files: [], inv: '', ket: '' }]; activeJobIdx = 0; renderJobs(); sessionStorage.setItem('tfl_jobs', JSON.stringify(jobs)); 
+            jobs = [{ files: [], inv: '', ket: '' }]; activeJobIdx = 0; renderJobs(); saveJobs(); saveAppState();
             
-            // Konfirmasi & Notifikasi Terkirim
             showToast('📤 Data terkirim!'); 
             playTone('send');
             showSystemNotification('Data Terkirim', `Terkirim ke ${isBroadcastMode ? sentCount + ' partner (Broadcast)' : activeChatId}`);
             
             updateChatImagesUI();
             updatePeerList();
+            saveAppState();
         }
 
         // ============================================================
@@ -1110,15 +1344,15 @@
                 
                 data.jobs.forEach(job => { if (job.files) { job.files.forEach(file => { if (file.type && file.type.startsWith('image/')) { sharedImages.push({ id: Date.now() + Math.random(), src: file.data, name: file.name, from: sender, timestamp: Date.now() }); } }); } }); 
                 updateChatImagesUI(); 
+                saveAppState();
                 
-                // Memicu Notifikasi Suara & Sistem (Data Masuk)
                 playTone('receive');
                 showSystemNotification(`Pesan Masuk dari ${sender}`, isBcast ? `[Broadcast] Mengirim data baru.` : `[Privat] Mengirim data rahasia.`);
 
-                // Daftarkan sebagai Pesan Belum Terbaca (Unread) jika sedang tidak membuka chat tersebut
                 const effectiveChatId = isBcast ? 'broadcast' : sender;
                 if (document.getElementById('module-cetak').classList.contains('active') || activeChatId !== effectiveChatId) {
                     unreadCounts[effectiveChatId] = (unreadCounts[effectiveChatId] || 0) + 1;
+                    saveUnreadCounts();
                     updateUnreadBadges();
                 }
                 
@@ -1126,7 +1360,7 @@
             } 
         }
 
-        function addMessageToHistory(msg) { const entry = { ...msg, _uid: ++msgIdCounter }; messageHistory.push(entry); renderMessageHistory(); saveMessageHistory(); }
+        function addMessageToHistory(msg) { const entry = { ...msg, _uid: ++msgIdCounter }; messageHistory.push(entry); renderMessageHistory(); saveMessageHistory(); saveAppState(); }
         
         // ============================================================
         //  FILTER RIWAYAT CHAT YANG TAMPIL SESUAI CHATROOM AKTIF
@@ -1138,13 +1372,10 @@
             const children = area.children; 
             for (let i = children.length - 1; i >= 0; i--) { if (children[i].id === 'empty-state') continue; area.removeChild(children[i]); } 
             
-            // Filter Berdasarkan Chatroom Aktif
             let filtered = messageHistory; 
             if (activeChatId === 'broadcast') {
-                // Tampilkan pesan broadcast
                 filtered = messageHistory.filter(m => m.isBroadcast || !m.target || m.target === 'broadcast');
             } else {
-                // Tampilkan pesan privat antara saya dan partner
                 filtered = messageHistory.filter(m => 
                     !m.isBroadcast && (
                         (m.sender === activeChatId && m.target === chat_myId) ||
@@ -1153,7 +1384,6 @@
                 );
             }
 
-            // Filter Berdasarkan Kolom Pencarian
             if (searchQuery.trim()) { 
                 const q = searchQuery.trim().toLowerCase(); 
                 filtered = filtered.filter(msg => { 
@@ -1207,11 +1437,11 @@
         function renderHistoryModal() { const body = document.getElementById('history-modal-body'); if (!messageHistory.length) { body.innerHTML = '<div class="history-empty">Belum ada pesan.</div>'; document.getElementById('history-total-msg').textContent = '0 pesan'; return; } const groups = {}; const sorted = [...messageHistory].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); sorted.forEach(msg => { const ts = msg.timestamp || Date.now(); const date = new Date(ts); const dateStr = date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }); if (!groups[dateStr]) { groups[dateStr] = { date: dateStr, dateObj: date, messages: [] }; } groups[dateStr].messages.push(msg); }); const sortedDates = Object.keys(groups).sort((a, b) => groups[a].dateObj.getTime() - groups[b].dateObj.getTime()); let html = ''; let totalMsg = 0; sortedDates.forEach(dateKey => { const group = groups[dateKey]; totalMsg += group.messages.length; html += `<div class="history-date-group" id="hist-group-${dateKey.replace(/\s/g,'_')}"><div class="history-date-header"><span class="date-label">📅 ${dateKey}</span><button class="btn-pdf-date" onclick="exportDateHistoryPDF('${dateKey}')">📄 PDF</button></div><div class="history-date-body">`; group.messages.forEach(msg => { const card = createMessageCard(msg); const clone = card.cloneNode(true); const actions = clone.querySelector('.actions'); if (actions) actions.remove(); const fwd = clone.querySelector('.forward-dropdown'); if (fwd) fwd.remove(); html += clone.outerHTML; }); html += `</div></div>`; }); body.innerHTML = html; document.getElementById('history-total-msg').textContent = totalMsg + ' pesan'; }
         function exportDateHistoryPDF(dateKey) { const groupEl = document.getElementById('hist-group-' + dateKey.replace(/\s/g, '_')); if (!groupEl) return showToast('⚠️ Tidak ditemukan', 'error'); const clone = groupEl.cloneNode(true); const btn = clone.querySelector('.btn-pdf-date'); if (btn) btn.remove(); const wrapper = document.createElement('div'); wrapper.style.padding = '16px'; wrapper.style.fontFamily = 'Inter, sans-serif'; wrapper.style.background = 'white'; wrapper.style.maxWidth = '800px'; wrapper.style.margin = '0 auto'; wrapper.appendChild(clone); const style = document.createElement('style'); style.textContent = `.history-date-group{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:12px}.history-date-header{background:#075E54;color:#fff;padding:10px 16px;display:flex;justify-content:space-between}.history-date-body{padding:8px 12px;background:#ECE5DD}.msg-card{max-width:100%;border-radius:10px;padding:6px 12px;margin-bottom:4px;background:#fff}.msg-card.in{background:#fff}.msg-card.out{background:#DCF8C6}.msg-header{font-size:.65rem;color:#667781;display:flex;justify-content:space-between}.msg-header .sender{font-weight:600;color:#075E54}.msg-body{font-size:.8rem;line-height:1.4}.msg-footer{display:none}.badge{font-size:.5rem;background:rgba(0,0,0,.05);padding:1px 6px;border-radius:8px}.file-box{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.04);padding:4px 8px;border-radius:6px;margin-top:4px}.pdf-badge{background:#ef4444;color:#fff;border-radius:4px;padding:1px 8px;font-size:.5rem;font-weight:700;margin-left:4px}`; wrapper.appendChild(style); document.body.appendChild(wrapper); html2pdf().set({ margin: [8, 8, 8, 8], filename: `Riwayat_Chat_${dateKey.replace(/\s/g,'_')}.pdf`, image: { type: 'jpeg', quality: 0.85 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } }).from(wrapper).save().then(() => { wrapper.remove(); showToast('✅ PDF selesai: ' + dateKey); }).catch(err => { console.error(err); wrapper.remove(); showToast('❌ Gagal membuat PDF', 'error'); }); }
         function exportAllHistoryPDF() { if (!messageHistory.length) return showToast('⚠️ Tidak ada pesan', 'error'); const wrapper = document.createElement('div'); wrapper.style.padding = '16px'; wrapper.style.fontFamily = 'Inter, sans-serif'; wrapper.style.background = 'white'; wrapper.style.maxWidth = '800px'; wrapper.style.margin = '0 auto'; const title = document.createElement('h2'); title.textContent = '📜 Riwayat Chat Lengkap'; title.style.color = '#075E54'; title.style.marginBottom = '16px'; wrapper.appendChild(title); const groups = {}; const sorted = [...messageHistory].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); sorted.forEach(msg => { const ts = msg.timestamp || Date.now(); const date = new Date(ts); const dateStr = date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }); if (!groups[dateStr]) { groups[dateStr] = { date: dateStr, dateObj: date, messages: [] }; } groups[dateStr].messages.push(msg); }); const sortedDates = Object.keys(groups).sort((a, b) => groups[a].dateObj.getTime() - groups[b].dateObj.getTime()); sortedDates.forEach(dateKey => { const group = groups[dateKey]; const div = document.createElement('div'); div.style.border = '1px solid #e5e7eb'; div.style.borderRadius = '12px'; div.style.overflow = 'hidden'; div.style.marginBottom = '12px'; const header = document.createElement('div'); header.style.background = '#075E54'; header.style.color = 'white'; header.style.padding = '10px 16px'; header.style.fontWeight = '700'; header.textContent = '📅 ' + dateKey; div.appendChild(header); const body = document.createElement('div'); body.style.padding = '8px 12px'; body.style.background = '#ECE5DD'; group.messages.forEach(msg => { const card = document.createElement('div'); card.className = `msg-card ${msg.type}`; card.style.maxWidth = '100%'; card.style.borderRadius = '10px'; card.style.padding = '6px 12px'; card.style.marginBottom = '4px'; card.style.background = msg.type === 'out' ? '#DCF8C6' : 'white'; let bodyHtml = ''; if (msg.jobs && msg.jobs.length) { msg.jobs.forEach(job => { bodyHtml += `<div style="margin-bottom:4px;">`; if (job.inv) bodyHtml += `<div style="font-weight:700;color:#075E54;margin-bottom:1px;">INV: ${escapeHtml(job.inv)}</div>`; if (job.ket) bodyHtml += `<div style="color:#333;font-size:0.75rem;margin-bottom:2px;">${escapeHtml(job.ket).replace(/\n/g,'<br>')}</div>`; if (job.files && job.files.length) { job.files.forEach(f => { const isPdf = f.isPdf || (f.name && f.name.toLowerCase().endsWith('.pdf')); if (f.type && f.type.startsWith('image/')) { bodyHtml += `<div style="margin-top:4px;">🖼️ ${escapeHtml(f.name)}</div>`; } else if (isPdf) { bodyHtml += `<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.04);padding:4px 8px;border-radius:6px;margin-top:4px;">📄 ${escapeHtml(f.name)} <span style="background:#ef4444;color:white;border-radius:4px;padding:1px 8px;font-size:0.5rem;font-weight:700;">PDF</span></div>`; } else { bodyHtml += `<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.04);padding:4px 8px;border-radius:6px;margin-top:4px;">📄 ${escapeHtml(f.name)}</div>`; } }); } bodyHtml += `</div>`; }); } const senderLabel = msg.type === 'out' ? 'Anda' : msg.sender; card.innerHTML = `<div style="font-size:0.65rem;color:#667781;display:flex;justify-content:space-between;"><span style="font-weight:600;color:#075E54;">${senderLabel}</span><span>${msg.time}</span></div><div style="font-size:0.8rem;line-height:1.4;">${bodyHtml}</div>`; body.appendChild(card); }); div.appendChild(body); wrapper.appendChild(div); }); const style = document.createElement('style'); style.textContent = `.msg-card{max-width:100%;border-radius:10px;padding:6px 12px;margin-bottom:4px}.msg-card.in{background:#fff}.msg-card.out{background:#DCF8C6}.msg-header{font-size:.65rem;color:#667781;display:flex;justify-content:space-between}.msg-header .sender{font-weight:600;color:#075E54}.msg-body{font-size:.8rem;line-height:1.4}.msg-footer{display:none}`; wrapper.appendChild(style); document.body.appendChild(wrapper); html2pdf().set({ margin: [8, 8, 8, 8], filename: 'Riwayat_Chat_Semua.pdf', image: { type: 'jpeg', quality: 0.85 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } }).from(wrapper).save().then(() => { wrapper.remove(); showToast('✅ PDF semua riwayat selesai.'); }).catch(err => { console.error(err); wrapper.remove(); showToast('❌ Gagal membuat PDF', 'error'); }); }
-        function resendMessage(uid) { const msg = messageHistory.find(m => m._uid === uid); if (!msg) return showToast('⚠️ Pesan tidak ditemukan', 'error'); if (!conns.length) return showToast('⚠️ Tidak ada partner terhubung', 'error'); const payload = { type: 'data', jobs: JSON.parse(JSON.stringify(msg.jobs)), id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), sender: chat_myId, time: now(), timestamp: Date.now(), resent: true, originalId: msg.id || msg._uid }; let sentCount = 0; conns.forEach(c => { if (c.open) { try { c.send(payload); sentCount++; } catch (e) { console.error(e); } } }); if (sentCount === 0) return showToast('❌ Gagal kirim ulang', 'error'); showToast('... Dikirim ulang ke ' + sentCount + ' partner'); const copy = { ...msg, type: 'out', sender: chat_myId, time: now(), timestamp: Date.now(), id: payload.id, resent: true, forwarded: false, _uid: ++msgIdCounter }; messageHistory.push(copy); renderMessageHistory(); saveMessageHistory(); }
+        function resendMessage(uid) { const msg = messageHistory.find(m => m._uid === uid); if (!msg) return showToast('⚠️ Pesan tidak ditemukan', 'error'); if (!conns.length) return showToast('⚠️ Tidak ada partner terhubung', 'error'); const payload = { type: 'data', jobs: JSON.parse(JSON.stringify(msg.jobs)), id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), sender: chat_myId, time: now(), timestamp: Date.now(), resent: true, originalId: msg.id || msg._uid }; let sentCount = 0; conns.forEach(c => { if (c.open) { try { c.send(payload); sentCount++; } catch (e) { console.error(e); } } }); if (sentCount === 0) return showToast('❌ Gagal kirim ulang', 'error'); showToast('... Dikirim ulang ke ' + sentCount + ' partner'); const copy = { ...msg, type: 'out', sender: chat_myId, time: now(), timestamp: Date.now(), id: payload.id, resent: true, forwarded: false, _uid: ++msgIdCounter }; messageHistory.push(copy); renderMessageHistory(); saveMessageHistory(); saveAppState(); }
         function toggleForwardMenu(uid) { const menu = document.getElementById(`fwd-list-${uid}`); if (!menu) return; const isOpen = menu.classList.contains('open'); document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); if (!isOpen) { const peers = getConnectedPeers(); if (peers.length) { menu.innerHTML = peers.map(p => `<div class="menu-item" onclick="forwardMessage(${uid},'${p}')">📤 ${p}</div>`).join(''); } else { menu.innerHTML = `<div class="menu-item" style="color:var(--text-secondary);">Tidak ada partner</div>`; } menu.classList.add('open'); } setTimeout(() => { document.addEventListener('click', function closeFwd(e) { if (!e.target.closest('.forward-dropdown')) { document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); document.removeEventListener('click', closeFwd); } }); }, 10); }
-        function forwardMessage(uid, targetPeer) { const msg = messageHistory.find(m => m._uid === uid); if (!msg) return showToast('⚠️ Pesan tidak ditemukan', 'error'); const conn = conns.find(c => c.peer === targetPeer && c.open); if (!conn) return showToast('❌ Koneksi ke ' + targetPeer + ' tidak aktif', 'error'); const payload = { type: 'data', jobs: JSON.parse(JSON.stringify(msg.jobs)), id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), sender: chat_myId, time: now(), timestamp: Date.now(), forwarded: true, originalSender: msg.sender || msg.originalSender || chat_myId, originalId: msg.id || msg._uid }; try { conn.send(payload); showToast('📤 Diteruskan ke ' + targetPeer); const copy = { ...msg, type: 'out', sender: chat_myId, time: now(), timestamp: Date.now(), id: payload.id, resent: false, forwarded: true, originalSender: msg.sender || msg.originalSender || chat_myId, _uid: ++msgIdCounter }; messageHistory.push(copy); renderMessageHistory(); saveMessageHistory(); document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); } catch (e) { showToast('❌ Gagal meneruskan', 'error'); } }
-        function sendAllToCetak(mode) { if (sharedImages.length === 0) { showToast('Tidak ada gambar untuk dicetak.', 'error'); return; } if (mode === 'resi') { let addedCount = 0; sharedImages.forEach(img => { const dataResi = extractOrderId(img.name, img.name); const added = addResi(img.src, img.name || 'Gambar Chat', dataResi.orderId, false, dataResi.resi, dataResi.pengirim, dataResi.courier); if (added) addedCount++; }); switchModule('cetak'); openCetakTab('resi'); showToast('🖨️ ' + addedCount + ' gambar dikirim ke cetak resi.'); } else { const w = parseInt(document.getElementById('imgW').value) || 50; const h = parseInt(document.getElementById('imgH').value) || 50; sharedImages.forEach(img => { cetak_imageData.push({ id: Date.now() + Math.random(), src: img.src, w, h, gap: 0 }); }); switchModule('cetak'); openCetakTab('image'); showToast('🖼️ ' + sharedImages.length + ' gambar dikirim ke cetak gambar.'); } updateCetakUI(); }
-        function clearTimeline() { if (messageHistory.length === 0) return; if (!confirm('Hapus semua pesan?')) return; messageHistory = []; renderMessageHistory(); saveMessageHistory(); showToast('🗑️ Timeline dibersihkan'); }
+        function forwardMessage(uid, targetPeer) { const msg = messageHistory.find(m => m._uid === uid); if (!msg) return showToast('⚠️ Pesan tidak ditemukan', 'error'); const conn = conns.find(c => c.peer === targetPeer && c.open); if (!conn) return showToast('❌ Koneksi ke ' + targetPeer + ' tidak aktif', 'error'); const payload = { type: 'data', jobs: JSON.parse(JSON.stringify(msg.jobs)), id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), sender: chat_myId, time: now(), timestamp: Date.now(), forwarded: true, originalSender: msg.sender || msg.originalSender || chat_myId, originalId: msg.id || msg._uid }; try { conn.send(payload); showToast('📤 Diteruskan ke ' + targetPeer); const copy = { ...msg, type: 'out', sender: chat_myId, time: now(), timestamp: Date.now(), id: payload.id, resent: false, forwarded: true, originalSender: msg.sender || msg.originalSender || chat_myId, _uid: ++msgIdCounter }; messageHistory.push(copy); renderMessageHistory(); saveMessageHistory(); saveAppState(); document.querySelectorAll('.forward-dropdown .menu.open').forEach(m => m.classList.remove('open')); } catch (e) { showToast('❌ Gagal meneruskan', 'error'); } }
+        function sendAllToCetak(mode) { if (sharedImages.length === 0) { showToast('Tidak ada gambar untuk dicetak.', 'error'); return; } if (mode === 'resi') { let addedCount = 0; sharedImages.forEach(img => { const dataResi = extractOrderId(img.name, img.name); const added = addResi(img.src, img.name || 'Gambar Chat', dataResi.orderId, false, dataResi.resi, dataResi.pengirim, dataResi.courier, false, dataResi.catatan); if (added) addedCount++; }); switchModule('cetak'); openCetakTab('resi'); showToast('🖨️ ' + addedCount + ' gambar dikirim ke cetak resi.'); } else { const w = parseInt(document.getElementById('imgW').value) || 50; const h = parseInt(document.getElementById('imgH').value) || 50; sharedImages.forEach(img => { cetak_imageData.push({ id: Date.now() + Math.random(), src: img.src, w, h, gap: 0 }); }); switchModule('cetak'); openCetakTab('image'); showToast('🖼️ ' + sharedImages.length + ' gambar dikirim ke cetak gambar.'); } saveCetakState(); updateCetakUI(); }
+        function clearTimeline() { if (messageHistory.length === 0) return; if (!confirm('Hapus semua pesan?')) return; messageHistory = []; renderMessageHistory(); saveMessageHistory(); saveAppState(); showToast('🗑️ Timeline dibersihkan'); }
         function now() { return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
         function toBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); }
         function downloadFile(data, name) { const a = document.createElement('a'); a.href = data; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
@@ -1219,7 +1449,7 @@
         function showToast(msg, type) { const t = document.createElement('div'); t.className = 'toast ' + (type === 'error' ? 'error' : ''); t.innerText = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3000); }
 
         // ============================================================
-        // DETEKSI ORDER ID, RESI, PENGIRIM, KURIR
+        // DETEKSI ORDER ID, RESI, PENGIRIM, KURIR, & CATATAN
         // ============================================================
         function detectCourier(text, resi = '') {
             const lower = (text || '').toLowerCase();
@@ -1247,21 +1477,49 @@
         }
 
         function extractOrderId(text, fileName = '') {
-            const result = { resi: '-', orderId: '-', pengirim: '-', courier: '-' };
+            const result = { resi: '-', orderId: '-', pengirim: '-', courier: '-', catatan: '-' };
             if (!text) return result;
             const cleanText = text.replace(/\t/g, ' ').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
             const lowerText = cleanText.toLowerCase();
-            // Resi
+            
+            const catatanMatch = cleanText.match(/(?:Catatan|Pesan|Note|Keterangan|Notes)\s*[:：]\s*([^\n\r]+)/i);
+            if (catatanMatch && catatanMatch[1]) {
+                result.catatan = catatanMatch[1].trim().substring(0, 100);
+            } else {
+                const fallbackMatch = cleanText.match(/(?:Catatan|Pesan|Note)\s*([^\n\r]{5,50})$/i);
+                if (fallbackMatch && fallbackMatch[1]) result.catatan = fallbackMatch[1].trim();
+            }
+
             const resiPatterns = [
-                /\bSPXID\d{9,15}\b/i, /\b(JY|JP|JX)\d{8,15}\b/i, /\b(ID|NLID)\d{10,15}\b/i,
-                /\b11\d{10,15}\b/, /\b[A-Z]{2}\d{9,12}\b/i, /\b\d{15,20}\b/, /\b\d{12,16}\b/
+                /\bSPXID\d{9,15}\b/i,
+                /\b(JY|JP|JX)\d{8,15}\b/i,
+                /\b(ID|NLID)\d{10,15}\b/i,
+                /\b11\d{10,15}\b/,
+                /\b[A-Z]{2}\d{9,12}\b/i,
+                /\b\d{15,20}\b/,
+                /\b\d{12,16}\b/,
+                /\b[A-Z]{1,2}\d{8,15}\b/i,
+                /\b[A-Z]{3}\d{10,14}\b/i,
+                /\b[A-Z]{2,4}\d{10,14}\b/i,
+                /\b\d{10,18}\b/
             ];
             for (const pattern of resiPatterns) {
                 const match = cleanText.match(pattern);
                 if (match) { result.resi = match[0].toUpperCase(); break; }
             }
-            // Order ID
-            const orderPatterns = [ /\b\d{6}[A-Z0-9]{8,12}\b/i, /\b5\d{17,19}\b/, /INV\/\d{8}\/[A-Z0-9]+\/\d+/i, /\b\d{10,14}\b/ ];
+
+            const orderPatterns = [
+                /\b\d{6}[A-Z0-9]{8,12}\b/i,
+                /\b5\d{17,19}\b/,
+                /INV\/\d{8}\/[A-Z0-9]+\/\d+/i,
+                /\b\d{10,14}\b/,
+                /\bTIK[A-Z0-9]{8,15}\b/i,
+                /\bTT[A-Z0-9]{8,15}\b/i,
+                /\bTO[A-Z0-9]{8,15}\b/i,
+                /\b[Tt][0-9]{10,15}\b/,
+                /\b[A-Z]{2}[0-9]{10,15}\b/i,
+                /\b[0-9]{12,18}\b/
+            ];
             for (const pattern of orderPatterns) {
                 const match = cleanText.match(pattern);
                 if (match) { result.orderId = match[0].toUpperCase(); break; }
@@ -1270,7 +1528,7 @@
                 const fileMatch = fileName.match(/\d{10,20}/);
                 if (fileMatch) result.orderId = fileMatch[0];
             }
-            // Pengirim
+
             let pengirim = '-';
             if (lowerText.includes('safah.id') || lowerText.includes('safah')) {
                 pengirim = 'SAFAH.ID';
@@ -1278,14 +1536,18 @@
                 pengirim = 'KERTASES';
             } else {
                 const senderPatterns = [
-                    /([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])\s+Pengirim\s*[:：]/i,
                     /Pengirim\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
-                    /Pengirim\s+[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
-                    /Pengirim\s*[:：]([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
                     /Penjual\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
                     /Seller\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
                     /Store\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
-                    /From\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i
+                    /From\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{1,30}[A-Za-z0-9\.])/i,
+                    /(?:Kepada|Untuk|Pengirim|Penjual|Seller|Store|From)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,40}[A-Za-z0-9\.])/i,
+                    /(?:Nama|Name)\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,30}[A-Za-z0-9\.])/i,
+                    /Toko\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,30}[A-Za-z0-9\.])/i,
+                    /Nama Toko\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,30}[A-Za-z0-9\.])/i,
+                    /Store Name\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,30}[A-Za-z0-9\.])/i,
+                    /Nama Penjual\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,30}[A-Za-z0-9\.])/i,
+                    /Shop Name\s*[:：]\s*([A-Za-z0-9][A-Za-z0-9\s\.\-_]{2,30}[A-Za-z0-9\.])/i
                 ];
                 for (const pattern of senderPatterns) {
                     const match = cleanText.match(pattern);
@@ -1306,7 +1568,7 @@
         }
 
         // ============================================================
-        //  PADDLEOCR INTEGRATION
+        //  PADDLEOCR INTEGRATION (dengan pre-processing)
         // ============================================================
         let paddleOCRServerActive = false;
         let OCR_SERVER_URL = localStorage.getItem('ocr_server_url') || 'http://localhost:8000/ocr';
@@ -1351,12 +1613,33 @@
             }
         }
 
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
         async function callPaddleOCR(imageSrc) {
             if (!paddleOCRServerActive || !document.getElementById('usePaddleOCR').checked) {
                 return null;
             }
             try {
-                const blob = await fetch(imageSrc).then(r => r.blob());
+                const img = await loadImage(imageSrc);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                let w = img.width, h = img.height;
+                if (w > 2000) { h = h * 2000 / w; w = 2000; }
+                if (h > 2000) { w = w * 2000 / h; h = 2000; }
+                canvas.width = w; canvas.height = h;
+                
+                ctx.drawImage(img, 0, 0, w, h);
+                
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+                
                 const formData = new FormData();
                 formData.append('file', blob, 'image.jpg');
                 const response = await fetch(OCR_SERVER_URL, {
@@ -1375,12 +1658,6 @@
         // ============================================================
         //  MODUL CETAK (dengan PaddleOCR integration)
         // ============================================================
-        let cetak_currentMode = 'resi';
-        let cetak_resiData = [];
-        let cetak_imageData = [];
-        let cetak_assetList = [];
-        let cetak_uploadedImages = [];
-        let cetak_uploadedHistory = [];
         const PAPER_SIZES = { 'A4': [210, 297], 'A3': [297, 420], 'A3+': [329, 483] };
         const imageFilenames = ['AESTETiC.jpg','ASTRONOT.jpg','AVATAR.jpg','BE-POSITIVE.jpg','BEACH.jpg','BT21.jpg','COFFEE.jpg','DORAEMON.jpg','FARM.jpg','FLOWER-NATURE.jpg','GAME.jpg','IDEAS=COFFEE.jpg','INDONESIA.jpg','ITSOK.jpg','KUCING LUTCU.jpg','LOVE.jpg','MEOW.jpg','MOOD-PANDA.jpg','MOTOR.jpg','NOTHINK.jpg','OCEANS.jpg','ONE-PICE.jpg','PANTAI.jpg','SAMURAI.jpg','SUCCES.jpg','SWEAT-CAT.jpg','TRAVELING.jpg','UNICORN.jpg','VW.jpg','H013.jpg','H014.jpg','H015.jpg','H016.jpg','H017.jpg','H021.jpg','H022.jpg','H023.jpg','H018.jpg','H019.jpg','H020.jpg'];
 
@@ -1393,6 +1670,7 @@
         }
         function saveUploadHistory() {
             try { localStorage.setItem('tfl_uploadHistory', JSON.stringify(cetak_uploadedHistory)); } catch (e) {}
+            saveAppState();
         }
 
         function switchModule(mod) {
@@ -1401,17 +1679,28 @@
             document.getElementById('module-chat').classList.remove('active');
             document.getElementById('module-cetak').classList.remove('active');
             document.getElementById('module-' + mod).classList.add('active');
-            if (mod === 'cetak') { updateCetakUI(); renderPrintHistory(); updateChatImagesUI(); loadUploadHistory(); }
             
-            // Atur pembersihan unread badge jika kembali ke chat tab
+            localStorage.setItem('tfl_active_tab', mod);
+            
+            if (mod === 'cetak') { 
+                updateCetakUI(); 
+                renderPrintHistory(); 
+                updateChatImagesUI(); 
+                loadUploadHistory(); 
+            }
+            
             if (mod === 'chat') {
                 unreadCounts[activeChatId] = 0;
+                saveUnreadCounts();
                 updateUnreadBadges();
+                renderMessageHistory();
             }
         }
 
         function openCetakTab(mode) {
             cetak_currentMode = mode;
+            saveCetakState();
+            
             document.querySelectorAll('.cetak-tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.cetak-tab-content').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('.canvas-container').forEach(v => v.classList.remove('active'));
@@ -1430,6 +1719,7 @@
             updateBadge();
             updateChatImagesUI();
             renderUploadHistory();
+            saveCetakState();
         }
 
         function updateBadge() {
@@ -1527,27 +1817,38 @@
 
         function deleteCetakItem(id) {
             if (cetak_currentMode === 'resi' || cetak_currentMode === 'history') { cetak_resiData = cetak_resiData.filter(i => i.id !== id); } else { cetak_imageData = cetak_imageData.filter(item => item.id !== id); }
+            saveCetakState();
             updateCetakUI();
         }
 
-        function clearCanvas() { if (!confirm("Hapus semua?")) return; if (cetak_currentMode === 'resi' || cetak_currentMode === 'history') cetak_resiData = []; else cetak_imageData = []; updateCetakUI(); }
+        function clearCanvas() { if (!confirm("Hapus semua?")) return; if (cetak_currentMode === 'resi' || cetak_currentMode === 'history') cetak_resiData = []; else cetak_imageData = []; saveCetakState(); updateCetakUI(); }
 
-        // --- addResi dengan PaddleOCR ---
-        async function addResi(src, name = 'Resi', orderId = '-', isDirectClickFromHistory = false, resi = '-', pengirim = '-', courier = '-') {
-            // Coba PaddleOCR
+        // --- addResi dengan PaddleOCR & SkipOCR ---
+        async function addResi(src, name = 'Resi', orderId = '-', isDirectClickFromHistory = false, resi = '-', pengirim = '-', courier = '-', skipOcr = false, catatan = '-') {
             let ocrText = null;
-            if (document.getElementById('usePaddleOCR').checked) {
+            
+            if (!skipOcr && document.getElementById('usePaddleOCR').checked) {
                 ocrText = await callPaddleOCR(src);
-            }
-            if (ocrText) {
-                const extracted = extractOrderId(ocrText, name);
-                resi = extracted.resi || resi;
-                orderId = extracted.orderId || orderId;
-                pengirim = extracted.pengirim || pengirim;
-                courier = extracted.courier || courier;
+                if (ocrText) {
+                    const extracted = extractOrderId(ocrText, name);
+                    resi = extracted.resi || resi;
+                    orderId = extracted.orderId || orderId;
+                    pengirim = extracted.pengirim || pengirim;
+                    courier = extracted.courier || courier;
+                    catatan = extracted.catatan || catatan;
+                }
+            } else if (skipOcr) {
+                console.log('⏩ Skip OCR, menggunakan teks digital PDF:', resi);
+                if (resi === '-' && name) {
+                    const extracted = extractOrderId(name, name);
+                    resi = extracted.resi || resi;
+                    orderId = extracted.orderId || orderId;
+                    pengirim = extracted.pengirim || pengirim;
+                    courier = extracted.courier || courier;
+                    catatan = extracted.catatan || catatan;
+                }
             }
 
-            // Duplikat check
             const inCanvas = cetak_resiData.some(item => {
                 if (orderId && item.orderId && item.orderId === orderId && item.orderId !== '-') return true;
                 return item.src === src;
@@ -1567,7 +1868,8 @@
             }
 
             const timestamp = new Date().toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            cetak_resiData.push({ id: Date.now() + Math.random(), src, name, orderId: orderId || '-', resi: resi || '-', pengirim: pengirim || '-', courier: courier || '-', timestamp });
+            cetak_resiData.push({ id: Date.now() + Math.random(), src, name, orderId: orderId || '-', resi: resi || '-', pengirim: pengirim || '-', courier: courier || '-', catatan: catatan || '-', timestamp });
+            saveCetakState();
             updateCetakUI();
             return true;
         }
@@ -1593,29 +1895,63 @@
                 const pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise;
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
-                    let dataResi = { resi: '-', orderId: '-', pengirim: '-', courier: '-' };
-                    try { const textContent = await page.getTextContent(); const textStr = textContent.items.map(item => item.str).join(' '); dataResi = extractOrderId(textStr, f.name); } catch (err) { console.error("Text extraction failed:", err); }
-                    const viewport = page.getViewport({ scale: 2.5 });
-                    const canvas = document.createElement('canvas'); canvas.width = viewport.width; canvas.height = viewport.height;
+                    
+                    let pdfText = '';
+                    try {
+                        const textContent = await page.getTextContent();
+                        pdfText = textContent.items.map(item => item.str).join(' ');
+                    } catch (e) { console.warn('Gagal ekstrak teks halaman', i); }
+
+                    if (pdfText.trim().length < 10) {
+                        console.log('⏭️ Halaman', i, 'terdeteksi kosong, dilewati.');
+                        continue;
+                    }
+
+                    let dataResi = { resi: '-', orderId: '-', pengirim: '-', courier: '-', catatan: '-' };
+                    if (pdfText.trim()) {
+                        dataResi = extractOrderId(pdfText, f.name);
+                        dataResi._fromDigital = true; 
+                    }
+
+                    const viewport = page.getViewport({ scale: 3.0 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
                     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
                     const trimmedCanvas = trimCanvas(canvas);
-                    const src = trimmedCanvas.toDataURL('image/jpeg', 0.9);
-                    const pageName = f.name + ' P' + i;
-                    const added = await addResi(src, pageName, dataResi.orderId, false, dataResi.resi, dataResi.pengirim, dataResi.courier);
-                    if (added) addToHistory(pageName, src, dataResi.orderId, dataResi.resi, dataResi.pengirim, dataResi.courier);
+                    const src = trimmedCanvas.toDataURL('image/jpeg', 0.92);
+
+                    const pageName = f.name + ' H' + i;
+                    
+                    const skipOcr = (dataResi.resi !== '-' && dataResi.resi.length >= 8) || pdfText.length > 50;
+                    
+                    const added = await addResi(
+                        src, 
+                        pageName, 
+                        dataResi.orderId, 
+                        false, 
+                        dataResi.resi, 
+                        dataResi.pengirim, 
+                        dataResi.courier,
+                        skipOcr,
+                        dataResi.catatan
+                    );
+                    if (added) addToHistory(pageName, src, dataResi.orderId, dataResi.resi, dataResi.pengirim, dataResi.courier, dataResi.catatan);
                 }
             }
             updateCetakUI();
+            saveCetakState();
         };
 
-        function addToHistory(name, src, orderId = '-', resi = '-', pengirim = '-', courier = '-') {
+        function addToHistory(name, src, orderId = '-', resi = '-', pengirim = '-', courier = '-', catatan = '-') {
             const alreadyInRegistry = cetak_uploadedHistory.some(item => {
                 if (orderId && item.orderId && item.orderId === orderId && item.orderId !== '-') return true;
                 return item.src === src;
             });
             if (!alreadyInRegistry) {
-                cetak_uploadedHistory.push({ name, src, orderId, resi, pengirim, courier });
+                cetak_uploadedHistory.push({ name, src, orderId, resi, pengirim, courier, catatan });
                 saveUploadHistory();
+                saveCetakState();
             }
             renderUploadHistory();
         }
@@ -1635,7 +1971,7 @@
         function addResiFromHistory(idx) {
             const item = cetak_uploadedHistory[idx];
             if (!item) return;
-            addResi(item.src, item.name, item.orderId, true, item.resi, item.pengirim, item.courier);
+            addResi(item.src, item.name, item.orderId, true, item.resi, item.pengirim, item.courier, false, item.catatan);
         }
 
         function deleteUploadedHistoryItem(idx, event) {
@@ -1643,6 +1979,7 @@
             if (!confirm(`Hapus "${cetak_uploadedHistory[idx].name}" dari riwayat upload?`)) return;
             cetak_uploadedHistory.splice(idx, 1);
             saveUploadHistory();
+            saveCetakState();
             renderUploadHistory();
         }
 
@@ -1651,6 +1988,7 @@
             if (!confirm('Hapus SEMUA riwayat upload? (tidak mempengaruhi canvas)')) return;
             cetak_uploadedHistory = [];
             saveUploadHistory();
+            saveCetakState();
             renderUploadHistory();
             showToast('🗑 Semua riwayat upload dihapus.');
         }
@@ -1676,12 +2014,11 @@
                     const uploadedImg = { id: Date.now() + Math.random(), name: file.name, dataUrl };
                     cetak_uploadedImages.push(uploadedImg);
                     renderUploadedImages();
-                    // Tambahkan ke canvas dengan PaddleOCR
-                    const added = await addResi(dataUrl, file.name);
+                    const added = await addResi(dataUrl, file.name, '-', false, '-', '-', '-', false, '-');
                     if (!added) {
-                        // fallback: tambahkan ke imageData
                         cetak_imageData.push({ id: uploadedImg.id, src: dataUrl, w: parseInt(document.getElementById('imgW').value), h: parseInt(document.getElementById('imgH').value), gap: 0 });
                     }
+                    saveCetakState();
                     updateCetakUI();
                 };
                 reader.readAsDataURL(file);
@@ -1706,6 +2043,7 @@
             cetak_imageData = cetak_imageData.filter(item => item.id !== removedId);
             cetak_resiData = cetak_resiData.filter(item => item.id !== removedId);
             renderUploadedImages();
+            saveCetakState();
             updateCetakUI();
         }
 
@@ -1814,7 +2152,15 @@
             const hash = `${totalResi}_${perPage}_${pW}_${pH}_${rW}_${rH}`;
             const now = Date.now();
             if (hash === _lastPrintHash && (now - _lastPrintTime) < 5000) { _printSaving = false; return; }
-            const itemsDetail = cetak_resiData.map((item, idx) => ({ name: item.name || 'Resi Tanpa Nama', orderId: item.orderId || '-', resi: item.resi || '-', pengirim: item.pengirim || '-', courier: item.courier || '-', page: Math.floor(idx / perPage) + 1 }));
+            const itemsDetail = cetak_resiData.map((item, idx) => ({ 
+                name: item.name || 'Resi Tanpa Nama', 
+                orderId: item.orderId || '-', 
+                resi: item.resi || '-', 
+                pengirim: item.pengirim || '-', 
+                courier: item.courier || '-', 
+                catatan: item.catatan || '-',
+                page: Math.floor(idx / perPage) + 1 
+            }));
             const entry = { id: now, timestamp: new Date().toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }), totalResi, perPage, totalPages, paperLabel, resiDim: `${rW}x${rH}mm`, items: itemsDetail };
             let history = JSON.parse(localStorage.getItem('resi_print_history') || '[]');
             if (history.length > 0 && history[0].totalResi === totalResi && (now - history[0].id) < 3000) { _printSaving = false; return; }
@@ -1835,7 +2181,8 @@
                     return (item.resi || '').toLowerCase().includes(historySearchQuery) ||
                            (item.orderId || '').toLowerCase().includes(historySearchQuery) ||
                            (item.pengirim || '').toLowerCase().includes(historySearchQuery) ||
-                           (item.courier || '').toLowerCase().includes(historySearchQuery);
+                           (item.courier || '').toLowerCase().includes(historySearchQuery) ||
+                           (item.catatan || '').toLowerCase().includes(historySearchQuery);
                 });
                 if (matchingItems.length > 0) {
                     filtered.push({
@@ -1890,7 +2237,6 @@
                 return timeB - timeA;
             });
 
-            // Jika sedang mencari, otomatis buka panel detail resi (expanded)
             const shouldOpen = historySearchQuery !== '';
 
             let html = '';
@@ -1901,21 +2247,20 @@
                 html += `<div style="padding:6px 8px;">`;
                 group.items.forEach((item, idx) => {
                     const timeOnly = item.timestamp.split(',')[1] || item.timestamp;
-                    const icon = '📄';
                     html += `<div style="margin-bottom:6px; border:1px solid #e5e7eb; border-radius:6px; background:white;">`;
                     html += `<div style="display:flex; align-items:center; padding:6px 10px; cursor:pointer; background:#f8f9fa;" onclick="toggleLogDetail(${item.id})">`;
-                    html += `<span style="font-size:18px; margin-right:8px;">${icon}</span>`;
+                    html += `<span style="font-size:18px; margin-right:8px;">📄</span>`;
                     html += `<div style="flex:1;"><div style="font-weight:600; font-size:11px;">Cetak ${item.totalResi} resi</div><div style="font-size:9px; color:var(--text-secondary);">${timeOnly} · ${item.paperLabel} · ${item.resiDim}</div></div>`;
                     html += `<span style="font-size:14px; color:var(--text-secondary);">${shouldOpen ? '▲' : '▼'}</span>`;
                     html += `</div>`;
                     html += `<div class="log-detail-row" id="log-detail-${item.id}" style="display:${shouldOpen ? 'block' : 'none'}; padding:6px 10px; background:#fafafa;">`;
-                    html += `<div class="log-table-container"><table class="log-detail-table"><thead><tr><th>NO.RESI</th><th>NO.PESANAN</th><th>PENGIRIM</th><th>KURIR</th><th>HAL</th></tr></thead><tbody>`;
+                    html += `<div class="log-table-container"><table class="log-detail-table"><thead><tr><th>NO.RESI</th><th>NO.PESANAN</th><th>PENGIRIM</th><th>KURIR</th><th>CATATAN</th><th>HAL</th></tr></thead><tbody>`;
                     if (item.items && item.items.length) {
                         item.items.forEach((i) => {
-                            html += `<tr><td>${i.resi || '-'}</td><td>${i.orderId || '-'}</td><td>${i.pengirim || '-'}</td><td>${i.courier || '-'}</td><td>${i.page || '-'}</td></tr>`;
+                            html += `<tr><td>${i.resi || '-'}</td><td>${i.orderId || '-'}</td><td>${i.pengirim || '-'}</td><td>${i.courier || '-'}</td><td>${i.catatan || '-'}</td><td>${i.page || '-'}</td></tr>`;
                         });
                     } else {
-                        html += `<tr><td colspan="5" style="text-align:center; color:#999;">Tidak ada detail</td></tr>`;
+                        html += `<tr><td colspan="6" style="text-align:center; color:#999;">Tidak ada detail</td></tr>`;
                     }
                     html += `</tbody></table></div>`;
                     html += `<div style="margin-top:4px; display:flex; gap:6px; justify-content:flex-end;"><button class="btn-red" style="padding:2px 10px; font-size:9px;" onclick="deleteHistoryItem(${item.id}, event)">Hapus</button></div>`;
@@ -1966,6 +2311,7 @@
                 'NO.PESANAN': item.orderId || '-',
                 'PENGIRIM': item.pengirim || '-',
                 'JASA KIRIM': item.courier || '-',
+                'CATATAN': item.catatan || '-',
                 'WAKTU': waktuStr
             }));
             if (typeof XLSX === 'undefined') {
@@ -1999,13 +2345,14 @@
             if (cetak_resiData.length === 0) { showToast('⚠️ Tidak ada resi di layar/canvas', 'error'); return; }
             const now = new Date();
             const waktuStr = now.toLocaleString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            let csv = 'NO.RESI,NO.PESANAN,PENGIRIM,JASA KIRIM,WAKTU\n';
+            let csv = 'NO.RESI,NO.PESANAN,PENGIRIM,JASA KIRIM,CATATAN,WAKTU\n';
             cetak_resiData.forEach(item => {
                 csv += [
                     item.resi || '-',
                     item.orderId || '-',
                     item.pengirim || '-',
                     item.courier || '-',
+                    (item.catatan || '-').replace(/,/g, ' '),
                     waktuStr
                 ].join(',') + '\n';
             });
@@ -2057,6 +2404,7 @@
                             'NO.PESANAN': item.orderId || '-',
                             'PENGIRIM': item.pengirim || '-',
                             'JASA KIRIM': item.courier || '-',
+                            'CATATAN': item.catatan || '-',
                             'TANGGAL CETAK': sessionDate,
                             'JAM CETAK': sessionTime,
                             'NAMA FILE': item.name || '-',
@@ -2069,6 +2417,7 @@
                         'NO.PESANAN': '-',
                         'PENGIRIM': '-',
                         'JASA KIRIM': '-',
+                        'CATATAN': '-',
                         'TANGGAL CETAK': sessionDate,
                         'JAM CETAK': sessionTime,
                         'NAMA FILE': 'Summary: ' + (session.totalResi || 0) + ' resi',
@@ -2103,7 +2452,7 @@
         function exportPrintHistoryCSV() {
             const history = getHistoryData();
             if (history.length === 0) { showToast('⚠️ Tidak ada histori cetak', 'error'); return; }
-            let csv = 'NO.RESI,NO.PESANAN,PENGIRIM,JASA KIRIM,TANGGAL CETAK,JAM CETAK,NAMA FILE,HALAMAN\n';
+            let csv = 'NO.RESI,NO.PESANAN,PENGIRIM,JASA KIRIM,CATATAN,TANGGAL CETAK,JAM CETAK,NAMA FILE,HALAMAN\n';
             history.forEach(session => {
                 let sessionDate = '', sessionTime = '';
                 if (session.timestamp) {
@@ -2132,6 +2481,7 @@
                             item.orderId || '-',
                             item.pengirim || '-',
                             item.courier || '-',
+                            (item.catatan || '-').replace(/,/g, ' '),
                             sessionDate,
                             sessionTime,
                             (item.name || '-').replace(/,/g, ' '),
@@ -2140,6 +2490,7 @@
                     });
                 } else {
                     csv += [
+                        '-',
                         '-',
                         '-',
                         '-',
@@ -2215,7 +2566,7 @@
                     const timeOnly = item.timestamp.split(',')[1] || item.timestamp;
                     let itemsListHtml = '';
                     if (item.items && item.items.length) {
-                        itemsListHtml = `<div style="margin-top:6px; padding-top:4px; border-top:1px dashed #e5e7eb; font-size:9px; color:#555;"><div style="font-weight:bold; margin-bottom:2px;">Daftar Item:</div>${item.items.map((i, idx) => `<div>${idx+1}. ${escapeHtml(i.name)} | Resi: ${i.resi} | Pesanan: ${i.orderId} | Pengirim: ${i.pengirim} | Kurir: ${i.courier}</div>`).join('')}</div>`;
+                        itemsListHtml = `<div style="margin-top:6px; padding-top:4px; border-top:1px dashed #e5e7eb; font-size:9px; color:#555;"><div style="font-weight:bold; margin-bottom:2px;">Daftar Item:</div>${item.items.map((i, idx) => `<div>${idx+1}. ${escapeHtml(i.name)} | Resi: ${i.resi} | Pesanan: ${i.orderId} | Pengirim: ${i.pengirim} | Kurir: ${i.courier} | Catatan: ${i.catatan || '-'}</div>`).join('')}</div>`;
                     }
                     card.innerHTML = `<div style="color:#667781;font-size:10px;font-weight:bold;">🕒 ${timeOnly}</div><div style="font-size:11px;margin-top:2px;">Kertas: <strong>${item.paperLabel}</strong></div><div style="font-size:11px;">Ukuran Resi: <strong>${item.resiDim}</strong></div><div style="display:flex;justify-content:space-between;margin-top:4px;border-top:1px dashed #e5e7eb;padding-top:4px;font-size:11px;"><span>Cetak: <strong>${item.totalResi} resi</strong></span><span>Halaman: <strong>${item.totalPages}</strong></span></div>${itemsListHtml}`;
                     body.appendChild(card);
@@ -2234,7 +2585,6 @@
         let isDragging = false;
         let startX, startY, initialX, initialY;
 
-        // Muat posisi yang tersimpan (dipanggil juga di doLogin)
         function loadBubblePosition() {
             const savedLeft = localStorage.getItem('bubbleLeft');
             const savedTop = localStorage.getItem('bubbleTop');
@@ -2285,7 +2635,6 @@
             let targetX = initialX + dx;
             let targetY = initialY + dy;
 
-            // Batasi agar tidak melampaui ukuran layar browser
             const maxW = window.innerWidth - fBubble.offsetWidth;
             const maxH = window.innerHeight - fBubble.offsetHeight;
             if (targetX < 0) targetX = 0;
@@ -2303,7 +2652,6 @@
             if (!isDragging) return;
             isDragging = false;
             
-            // Simpan posisi
             localStorage.setItem('bubbleLeft', fBubble.style.left);
             localStorage.setItem('bubbleTop', fBubble.style.top);
 
@@ -2311,7 +2659,6 @@
             const distanceX = Math.abs(rect.left - initialX);
             const distanceY = Math.abs(rect.top - initialY);
             
-            // Jika perpindahan kurang dari 5px, anggap sebagai click (bukan drag)
             if (distanceX < 5 && distanceY < 5) {
                 switchModule('chat');
             }
@@ -2343,20 +2690,17 @@
         renderPrintHistory();
         updateChatImagesUI();
         loadUploadHistory();
-        loadBubblePosition(); // Muat posisi bubble
+        loadBubblePosition();
         setTimeout(() => {
             updateChatImagesUI();
-            checkPaddleOCRServer(); // auto check server
+            checkPaddleOCRServer();
         }, 1000);
         console.log('✅ Aplikasi terintegrasi dengan PaddleOCR dan TURN server siap pakai.');
+        console.log('✅ State persistence aktif: semua data chat & cetak akan tersimpan otomatis.');
         
-        // Tambahan untuk komunikasi dengan Electron
-if (window.electronAPI) {
-  // Saat bubble diklik, kita panggil showMainWindow dari main process
-  // Tapi kita tidak perlu karena kita punya bubble.html yang independen.
-  // Namun kita bisa menambahkan listener untuk menampilkan window jika diperlukan.
-  console.log('Electron API siap');
-}
+        if (window.electronAPI) {
+          console.log('Electron API siap');
+        }
     </script>
 </body>
 </html>
